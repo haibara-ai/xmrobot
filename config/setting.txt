@@ -1,0 +1,26 @@
+# mode=1 for dj only; mode=2 for audience only; mode=3 for dj and audience; mode=0 for all users update info;
+mode=3
+
+# dj config
+dj_room=73863
+#dj_rate=1, dj rate good; dj_rate=0, dj not rate; dj_rate=-1, dj rate bad;
+dj_rate=0
+dj_rate_period=100
+dj_chat_period=0
+dj_count=4
+#max loop value each day
+dj_max_loop=700
+auto_next_period=50
+
+# audience config
+audience_room=73863
+#audience_rate same with dj_rate
+audience_rate=1
+audience_rate_period=100
+audience_chat_period=5
+audience_count=10
+
+# common config
+show_dj_log=1
+show_audience_log=0
+login_gap=1000
