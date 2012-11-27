@@ -50,12 +50,13 @@ public class MainFrame extends SingleFrameApplication {
 		getMainFrame().getContentPane().setLayout(mainFrameLayout);
 		{
 			topPanel = new JPanel();
-			TableLayout topPanelLayout = new TableLayout(new double[][] {{70.0, TableLayout.FILL, 142.0, TableLayout.FILL}, {14.0, 35.0, 11.0, TableLayout.FILL}});
+			TableLayout topPanelLayout = new TableLayout(new double[][] {{70.0, TableLayout.FILL, 142.0, TableLayout.FILL}, {14.0, 35.0, 47.0, 11.0, TableLayout.FILL}});
 			topPanelLayout.setHGap(5);
 			topPanelLayout.setVGap(5);
 			topPanel.setLayout(topPanelLayout);
 			getMainFrame().getContentPane().add(topPanel);
 			topPanel.setPreferredSize(new java.awt.Dimension(364, 331));
+			topPanel.setLocale(new java.util.Locale("zh"));
 			{
 				chatLabel = new JLabel();
 				topPanel.add(chatLabel, "0,1,c,c");
@@ -63,7 +64,7 @@ public class MainFrame extends SingleFrameApplication {
 			}
 			{
 				chatField = new JTextField();
-				topPanel.add(chatField, "1, 1, 2, 1");
+				topPanel.add(chatField, "1,1,2,1,f,c");
 				chatField.setName("chatField");
 			}
 			{
@@ -78,13 +79,34 @@ public class MainFrame extends SingleFrameApplication {
 			}
 			{
 				jScrollPane1 = new JScrollPane();
-				topPanel.add(jScrollPane1, "0, 3, 3, 3");
+				topPanel.add(jScrollPane1, "0, 4, 3, 4");
 				{
 					jTextArea1 = new JTextArea();
 					jScrollPane1.setViewportView(jTextArea1);
 					jTextArea1.setName("jTextArea1");
 					jTextArea1.setLocale(new java.util.Locale("zh"));
 				}
+			}
+			{
+				jLabel1 = new JLabel();
+				topPanel.add(jLabel1, "0,2,c,c");
+				jLabel1.setName("jLabel1");
+			}
+			{
+				jTextField1 = new JTextField();
+				topPanel.add(jTextField1, "1,2,2,2,f,c");
+				jTextField1.setLocale(new java.util.Locale("zh"));
+			}
+			{
+				jButton1 = new JButton();
+				topPanel.add(jButton1, "3,2,c,c");
+				jButton1.setName("jButton1");
+				jButton1.setLocale(new java.util.Locale("zh"));
+				jButton1.addActionListener(new ActionListener() {
+					public void actionPerformed(ActionEvent evt) {
+						jButton1ActionPerformed(evt);
+					}
+				});
 			}
 		}
 		{
@@ -120,16 +142,19 @@ public class MainFrame extends SingleFrameApplication {
 		XMDriver.root = rootPath;
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				driver = new XMDriver();
-				try {
-					driver.start();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+				InitializeXMDriver();
 			}
 		});	
 	}
-
+	private void InitializeXMDriver() {
+		driver = new XMDriver();
+		driver.setNotifier(this);
+		try {
+			driver.start();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
 	private StringBuffer sb = new StringBuffer();
 	private PrintStream ps = null;
 	private XMDriver driver = null;
@@ -139,8 +164,20 @@ public class MainFrame extends SingleFrameApplication {
 	}
 
 	private boolean chatState = false;
+	private JButton jButton1;
+	private JTextField jTextField1;
+	private JLabel jLabel1;
 	private JScrollPane jScrollPane1;
-
+	
+	private void jButton1ActionPerformed(ActionEvent evt) {
+		if (this.driver != null) {
+			if (!this.jTextField1.getText().trim().isEmpty()) {
+				this.driver.setAudienceChatPeriod(Integer.parseInt(this.jTextField1.getText().trim()));
+			}
+		}
+		
+	}
+	
 	private void chatButtonActionPerformed(ActionEvent evt) {
 		if (chatState == true) {
 			if (this.driver != null) {

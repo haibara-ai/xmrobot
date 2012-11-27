@@ -6,8 +6,10 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MaximizeAction;
 
@@ -15,8 +17,15 @@ import org.haibara.io.DataHandler;
 
 public class XMDriver {
 
-	static String root = "";
-
+	protected static String root = "";
+	protected static boolean taskComplete = false;
+	private static Calendar calendar = new GregorianCalendar();
+	protected final static String configDir = "/config/";
+	protected final static String logDir = configDir+"/log/";
+	protected final static String profileDir = configDir+"/profile/";
+	protected final static String userFilePath = configDir + "/user.txt";
+	protected final static String settingFilePath = configDir + "/setting.txt";
+	
 	@SuppressWarnings("unchecked")
 	private static Map<String, List<Map<String, String>>> loadUser(String path) {
 		Map<String, List<Map<String, String>>> ret = new HashMap<String, List<Map<String, String>>>();
@@ -95,7 +104,7 @@ public class XMDriver {
 		for (String file : DataHandler.listFileName(dir)) {
 			try {
 				List<String> profile = (List<String>) DataHandler.readFile(root
-						+ "/config/profile/" + file, "list");
+						+ profileDir + file, "list");
 				for (String line : profile) {
 					if (line.startsWith("account=")) {
 						ret.put(line.substring(line.indexOf("=") + 1), file);
@@ -172,8 +181,6 @@ public class XMDriver {
 		return -1;
 	}
 
-	private static Calendar calendar = new GregorianCalendar();
-
 	public void setAudienceChat(String message) {
 		for (XMRobot robot : audienceList) {
 			if (robot != null) {
@@ -181,7 +188,10 @@ public class XMDriver {
 			}
 		}
 	}
-	public void setAudienceChatPeriod(int period) {
+	public void setAudienceChatPeriod(int period) {	
+		if (period <= 0) {
+			return;
+		}
 		for (XMRobot robot : audienceList) {
 			if (robot != null) {
 				robot.setChatPeriod(period*1000);
@@ -189,6 +199,9 @@ public class XMDriver {
 		}
 	}
 	public void setAudienceRatePeriod(int period) {
+		if (period <= 0) {
+			return;
+		}
 		for (XMRobot robot : audienceList) {
 			if (robot != null) {
 				robot.setRatePeriod(period*1000);
@@ -196,179 +209,163 @@ public class XMDriver {
 		}
 	}
 	public void setAudienceRate(int rate) {
-		for (XMRobot robot : audienceList) {
+		for (XMAudience robot : audienceList) {
 			if (robot != null) {
 				robot.setRate(rate);
 			}
 		}
 	}
 	
-	
 	public void stopAudienceChat() {
-		for (XMRobot robot : audienceList) {
+		for (XMAudience robot : audienceList) {
 			if (robot != null) {
 				robot.stopChat();
 			}
 		}
 	}
+	
+	private int djCount = 0;
+	private int maxLoop = 0;
+	private int audienceCount = 0;
+	private int mode = -1;
 
-	int dj_count = 0;
-	int dj_chat_period = 0;
-	int dj_rate_period = 0;
-	int dj_auto_next_period = 0;
-	int dj_rate = 0;
-	int dj_room = 0;
-	int max_loop = 0;
-
-	int audience_count = 0;
-	int audience_chat_period = 0;
-	int audience_rate_period = 0;
-	int audience_rate = 0;
-	int audience_room = 0;
-
-	int show_dj_log = 0;
-	int show_audience_log = 0;
-
-	int mode = -1;
-
-	private List<XMRobot> djList = new ArrayList<XMRobot>();
-	private List<XMRobot> audienceList = new ArrayList<XMRobot>();
-
+	private List<XMDJ> djList = new ArrayList<XMDJ>();
+	private List<XMAudience> audienceList = new ArrayList<XMAudience>();
+	private Map<String,String> djProperties = new HashMap<String, String>();
+	private Map<String,String> audienceProperties = new HashMap<String, String>();
+	
 	public void start() throws InterruptedException {
 		Map<String, List<Map<String, String>>> users = XMDriver.loadUser(root
-				+ "/config/user.txt");
+				+ userFilePath);
 		Map<String, String> settings = XMDriver.loadSetting(root
-				+ "/config/setting.txt");
+				+ settingFilePath);
 		Map<String, String> profiles = XMDriver.loadProfile(root
-				+ "/config/profile/");
+				+ profileDir);
 		mode = Integer.parseInt(settings.get("mode"));
-		show_dj_log = Integer.parseInt(settings.get("show_dj_log"));
-		show_audience_log = Integer.parseInt(settings.get("show_audience_log"));
-
+		maxLoop = Integer.parseInt(settings.get("dj_max_loop"));
+		djProperties.put("show_log", settings.get("show_dj_log"));
+		djProperties.put("mode", settings.get("mode"));
+		djProperties.put("auto_next_period", settings.get("auto_next_period"));
+		djProperties.put("rate", settings.get("dj_rate"));
+		djProperties.put("room", settings.get("dj_room"));
+		djProperties.put("max_loop_val", settings.get("dj_max_loop"));
+		djProperties.put("chat_period", settings.get("dj_chat_period"));
+		djProperties.put("rate_period", settings.get("dj_rate_period"));
+		
+		audienceProperties.put("show_log", settings.get("show_audience_log"));
+		audienceProperties.put("mode", settings.get("mode"));
+		audienceProperties.put("rate", settings.get("audience_rate"));
+		audienceProperties.put("room", settings.get("audience_room"));
+		audienceProperties.put("chat_period", settings.get("audience_chat_period"));
+		audienceProperties.put("rate_period", settings.get("audience_rate_period"));
+		
 		if (mode == 0) {
-			dj_count = users.get("dj").size();
-			audience_count = users.get("audience").size();
+			djCount = users.get("dj").size();
+			audienceCount = users.get("audience").size();
 		} else if (mode == 1) {
-			dj_count = Integer.parseInt(settings.get("dj_count")) > users.get(
+			djCount = Integer.parseInt(settings.get("dj_count")) > users.get(
 					"dj").size() ? users.get("dj").size() : Integer
 					.parseInt(settings.get("dj_count"));
-			dj_chat_period = Integer.parseInt(settings.get("dj_chat_period"));
-			dj_rate_period = Integer.parseInt(settings.get("dj_rate_period"));
-			dj_auto_next_period = Integer.parseInt(settings
-					.get("auto_next_period"));
-			dj_rate = Integer.parseInt(settings.get("dj_rate"));
-			dj_room = Integer.parseInt(settings.get("dj_room"));
-			max_loop = Integer.parseInt(settings.get("dj_max_loop"));
 		} else if (mode == 2) {
-			audience_count = Integer.parseInt(settings.get("audience_count")) > users
+			audienceCount = Integer.parseInt(settings.get("audience_count")) > users
 					.get("audience").size() ? users.get("audience").size()
 					: Integer.parseInt(settings.get("audience_count"));
-			audience_chat_period = Integer.parseInt(settings
-					.get("audience_chat_period"));
-			audience_rate_period = Integer.parseInt(settings
-					.get("audience_rate_period"));
-			audience_rate = Integer.parseInt(settings.get("audience_rate"));
-			audience_room = Integer.parseInt(settings.get("audience_room"));
-			max_loop = Integer.parseInt(settings.get("dj_max_loop"));
 		} else if (mode == 3) {
-			dj_count = Integer.parseInt(settings.get("dj_count")) > users.get(
+			djCount = Integer.parseInt(settings.get("dj_count")) > users.get(
 					"dj").size() ? users.get("dj").size() : Integer
 					.parseInt(settings.get("dj_count"));
-			dj_chat_period = Integer.parseInt(settings.get("dj_chat_period"));
-			dj_rate_period = Integer.parseInt(settings.get("dj_rate_period"));
-			dj_auto_next_period = Integer.parseInt(settings
-					.get("auto_next_period"));
-			dj_rate = Integer.parseInt(settings.get("dj_rate"));
-			dj_room = Integer.parseInt(settings.get("dj_room"));
-			audience_count = Integer.parseInt(settings.get("audience_count")) > users
+			audienceCount = Integer.parseInt(settings.get("audience_count")) > users
 					.get("audience").size() ? users.get("audience").size()
 					: Integer.parseInt(settings.get("audience_count"));
-			audience_chat_period = Integer.parseInt(settings
-					.get("audience_chat_period"));
-			audience_rate_period = Integer.parseInt(settings
-					.get("audience_rate_period"));
-			audience_rate = Integer.parseInt(settings.get("audience_rate"));
-			audience_room = Integer.parseInt(settings.get("audience_room"));
-			max_loop = Integer.parseInt(settings.get("dj_max_loop"));
 		} else {
 			System.err.println("Invalid mode:" + mode);
 		}
 
-		System.out.println("dj count:" + dj_count);
-		System.out.println("audience count:" + audience_count);
-		// start dj
-		int dj_index = 0;
-		List<String> djTaskList = new ArrayList<String>();
-		if (dj_auto_next_period > 0) {
-			djTaskList.add("auto_next");
-		}
+		System.out.println("dj count:" + djCount);
+		System.out.println("audience count:" + audienceCount);
+		Set<String> djSet = new HashSet<String>();
+		// start dj		
 		for (Map<String, String> user : users.get("dj")) {
-			if (dj_index >= dj_count) {
+			if (djSet.size() >= djCount) {
 				break;
 			}
+			djSet.add(user.get("user"));
 			int startLoopVal = loadLoopLog(
-					root + "/config/log/." + profiles.get(user.get("user")),
-					max_loop);
+					root + logDir +"." + profiles.get(user.get("user")),
+					maxLoop);
 			if (startLoopVal == Integer.MAX_VALUE) {
 				System.out.println(profiles.get(user.get("user"))
 						+ " task completed");
 				continue;
 			}
-			XMRobot robot = new XMRobot(user.get("user"), user.get("password"),
-					"dj", dj_auto_next_period, dj_chat_period, dj_rate_period,
-					dj_rate, dj_room, startLoopVal, max_loop, show_dj_log,
-					djTaskList);
-			dj_index++;
+			djProperties.put("start_loop_val", startLoopVal+"");
+			XMDJ robot = new XMDJ(user.get("user"), user.get("password"),djProperties);
 			djList.add(robot);
 		}
 		for (int i = 0; i < djList.size() - 1; i++) {
-			djList.get(i).addCascadeRobot(djList.get(i + 1));
-		}
+			djList.get(i).addCascadeDJ(djList.get(i + 1));
+		}		
 		if (djList.size() > 0) {
+			djList.get(djList.size()-1).setXMDriver(this);			
 			new Thread(djList.get(0)).start();
-		}
+		} else if (mode == 3 || mode == 1){
+			taskComplete = true;
+			this.notifyExit();
+			return;
+		}		
 		// start audience
-		int audience_index = 0;
-		List<String> audienceTaskList = new ArrayList<String>();
-		audienceTaskList.add("chat");
-		audienceTaskList.add("rate");
+		Set<String> audienceSet = new HashSet<String>();
 		for (Map<String, String> user : users.get("audience")) {
-			if (audience_index >= audience_count) {
+			if (audienceSet.size() >= audienceCount) {
 				break;
 			}
-			int startLoopVal = -1;
-			XMRobot robot = new XMRobot(user.get("user"), user.get("password"),
-					"audience", dj_auto_next_period, audience_chat_period,
-					audience_rate_period, audience_rate, audience_room,
-					startLoopVal, max_loop, show_audience_log, audienceTaskList);
+			audienceSet.add(user.get("user"));
+			if (djSet.contains(user.get("user"))) {
+				continue;
+			}
+			XMAudience robot = new XMAudience(user.get("user"), user.get("password"),audienceProperties);
 			audienceList.add(robot);
 			new Thread(robot).start();
-			audience_index++;
 			Thread.sleep(Integer.parseInt(settings.get("login_gap")));
+		}
+		if (audienceList.size() == 0 && mode == 2) {
+			taskComplete = true;
+			this.notifyExit();
+			return;
 		}
 	}
 	
-	public XMRobot getCurrentDJ() {
-		for (XMRobot dj: djList) {
-			if (dj != null && dj.isDJ()) {
+	private MainFrame notifier = null;
+	
+	public void setNotifier(MainFrame frame) {
+		this.notifier = frame;
+	}
+	
+	protected void notifyExit() {
+		if (this.notifier != null) {
+			this.notifier.exit();
+		}
+	}
+	
+	public XMDJ getCurrentDJ() {
+		for (XMDJ dj: djList) {
+			if (dj != null && dj.atRoom) {
 				return dj;
 			}
 		}
 		return null;
 	}
 	
-	public void stopALLDJ() {
-		for (XMRobot dj : djList) {
-			if (dj != null) {
-				dj.stopWork();
-			}
-		}
+	protected void exit() {
+		this.stopALLAudience();
+		this.notifyExit();
 	}
 	
 	public void stopALLAudience() {
-		for (XMRobot robot : audienceList) {
+		for (XMAudience robot : audienceList) {
 			if (robot != null) {
 				robot.stopWork();
+				robot.stopConnect();
 			}
 		}
 	}

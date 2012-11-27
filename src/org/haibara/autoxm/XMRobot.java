@@ -11,11 +11,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 //import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,105 +28,88 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.haibara.io.DataHandler;
-import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 public class XMRobot implements Runnable {
 
-	private String id = null;
-	private String pw = null;
+	protected String id = null;
+	protected String pw = null;
 
-	private HttpClient client = null;
+	protected HttpClient client = null;
 
-	private SimpleDateFormat time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	protected SimpleDateFormat time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-	private final String socketioHost = "sio.xiami.com:80";
-	// private final String socketioHost_Alt = "sio.xiami.com:443";
+	protected final String socketioHost = "sio.xiami.com:80";
+	protected final String socketioHost_Alt = "sio.xiami.com:443";
 
-	private final String loginXMUrl = "http://www.xiami.com/member/login";
-	private final String xmHostHeader = "www.xiami.com";
+	protected final String loginXMUrl = "http://www.xiami.com/member/login";
+	protected final String xmHostHeader = "www.xiami.com";
 
-	private final String loginLoopUrl = "http://loop.xiami.com/member/login?done=/loop/prverify";
-	private final String loopHostHeader = "loop.xiami.com";
+	protected final String loginLoopUrl = "http://loop.xiami.com/member/login?done=/loop/prverify";
+	protected final String loopHostHeader = "loop.xiami.com";
 
-	// private final String visitLoopUrl = "http://loop.xiami.com/loop";
-	// private final String visitXMUrl = "http://www.xiami.com/";
-	private final String userAgentHeader = "Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20100101 Firefox/15.0.1";
-	private final String acceptCharsetHeader = "UTF-8,*;q=0.5";
-	private final String acceptEncodingHeader = "deflate";
-	private final String acceptLanguageHeader = "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3";
-	private final String acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-	private final String connectionHeader = "keep-alive";
-	private final String contentTypeHeader = "application/x-www-form-urlencoded";
-	private final String socketioHostHeader = "sio.xiami.com";
+	protected final String userAgentHeader = "Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20100101 Firefox/15.0.1";
+	protected final String acceptCharsetHeader = "UTF-8,*;q=0.5";
+	protected final String acceptEncodingHeader = "deflate";
+	protected final String acceptLanguageHeader = "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3";
+	protected final String acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+	protected final String connectionHeader = "keep-alive";
+	protected final String contentTypeHeader = "application/x-www-form-urlencoded";
+	protected final String socketioHostHeader = "sio.xiami.com";
+	
+	protected String chatMessage = "";
 
-	private final String loopRoomUrl = "http://loop.xiami.com/room/";
+	protected final String loopRoomUrl = "http://loop.xiami.com/room/";
 
-	private int userCount = -1;
-
-	private int maxLoopVal = 0;
-
-	private String defaultProtocol = "http";
-
-	private Pattern uidRe = Pattern
+	protected String defaultProtocol = "http";
+	
+	protected Pattern uidRe = Pattern
 			.compile(
 					"class=\"uico_home\"\\s+href=\"/u/([0-9]+)\"\\s+title=\".*?\\(.*?\\)\">",
 					Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-	private Pattern nickRe = Pattern
+	protected Pattern nickRe = Pattern
 			.compile(
 					"class=\"uico_home\"\\s+href=\"/u/[0-9]+\"\\s+title=\".*?\\((.*?)\\)\">",
 					Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
-	private String uid = null;
-	private String nick = null;
-	private String memberAuth = null;
-	private String parsedMemberAuth = null;
+	protected String uid = null;
+	protected String nick = null;
+	protected String memberAuth = null;
+	protected String parsedMemberAuth = null;
+	protected SocketIO socket = null;
+	protected int room = 0;
+	protected boolean atRoom = false;
+	protected boolean taskComplete = false;
+	protected int showLog = -1;
 
-	SocketIO socket = null;
-	private int room = 0;
-	private int rate = 0;
-	private int rate_period = 0;
-	private int chat_period = 0;
-	private String character = null;
-	private int show_log = -1;
-
-	private int loopVal = -1;
-
-	private boolean atRoom = false;
-	private boolean isDJ = false;
-
-	private int startLoopVal = -1;
-	private int playListCount = -1;
-
-	private boolean taskComplete = false;
-	private XMRobot cascadeRobot = null;
-	private int auto_next_period = 0;
-
-	public XMRobot(String id, String pw, String character, int auto_next_period, int chat_period,
-			int rate_period, int rate, int room, int start_loop, int max_loop,
-			int show_log, List<String> taskList) {
-		client = new DefaultHttpClient();
-		this.pw = pw;
+	protected int rate = 0;
+	protected int ratePeriod = 0;
+	protected int chatPeriod = 0;
+	protected boolean rateSignal = false;	
+	protected boolean chatSignal = false;
+	protected XMTaskThread chatThread = null;
+	protected XMTaskThread rateThread = null;
+	
+	protected List<String> taskList;
+	protected Map<String,String> properties = null;
+	
+	public XMRobot(String id, String pw, Map<String,String> properties) {
 		this.id = id;
-		this.room = room;
-		this.rate = rate;
-		this.chat_period = chat_period;
-		this.rate_period = rate_period;
-		this.auto_next_period = auto_next_period;
-		this.character = character;
-		this.show_log = show_log;
-		this.maxLoopVal = max_loop;
-		this.startLoopVal = start_loop;
-		this.taskList = taskList;
-	}
-
-	public void addCascadeRobot(XMRobot robot) {
-		this.cascadeRobot = robot;
+		this.pw = pw;
+		this.client = new DefaultHttpClient();
+		this.properties = properties;
+		this.room = Integer.parseInt(GetProperty("room"));
+		this.showLog = Integer.parseInt(GetProperty("show_log"));
+		this.rate = Integer.parseInt(GetProperty("rate"));
+		this.ratePeriod = Integer.parseInt(GetProperty("rate_period")) <= 0 ? 30 : Integer.parseInt(GetProperty("rate_period"));
+		this.chatPeriod = Integer.parseInt(GetProperty("chat_period")) <= 0 ? 5 : Integer.parseInt(GetProperty("chat_period"));
 	}
 	
-	public boolean isDJ() {
-		return this.isDJ;
+	protected String GetProperty(String key){
+		if (this.properties == null || !this.properties.containsKey(key)) {
+			return "";
+		}
+		return this.properties.get(key);
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -153,7 +134,7 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(post);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 302) {
-			System.err.println("login xiami failed!");
+			System.err.println(this.id+" login xiami failed!");
 			return false;
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
@@ -186,7 +167,7 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(post);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 302) {
-			System.err.println("login loop failed!");
+			System.err.println(this.id+" login loop failed!");
 			return false;
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
@@ -214,7 +195,7 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.err.println("visit xm failed!");
+			System.err.println(this.id+" visit xm failed!");
 			return false;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
@@ -235,8 +216,27 @@ public class XMRobot implements Runnable {
 		}
 		return true;
 	}
-
-	public boolean enterLoopRoom(String roomId) throws IOException,
+	
+	public void MessageHandler(JSONObject json, IOAcknowledge ack) {
+	}
+	public void MessageHandler(String data, IOAcknowledge ack) {
+		DEBUG("message:" + data);
+	}
+	public void ErrorHandler(SocketIOException socketIOException) {
+		socketIOException.printStackTrace();
+	}
+	
+	public void DisconnectHandler() {
+		
+	}
+	public void ConnectHandler() {
+		
+	}
+	public void EventHandler(String event, IOAcknowledge ack, Object... args) {
+		DEBUG("event@" + uid + ":" + event);
+	}
+	
+	public boolean enterLoopRoom(int roomId) throws IOException,
 			InterruptedException {
 		String roomUrl = defaultProtocol + "://" + socketioHost + "/room?id="
 				+ roomId;
@@ -252,155 +252,40 @@ public class XMRobot implements Runnable {
 		handshakeGet.addHeader("Connection", connectionHeader);
 		handshakeGet.addHeader("Referer", loopRoomUrl + roomId);
 		handshakeGet.addHeader("Cookie", "member_auth=" + this.memberAuth);
-		Hacker hacker = new Hacker(this.memberAuth, roomId, client,
-				handshakeGet, this.show_log);
+		Hacker hacker = new Hacker(this.memberAuth, roomId+"", client,
+				handshakeGet, this.showLog);
 
 		socket = new SocketIO(hacker);
 
 		socket.connect(roomUrl, new IOCallback() {
 			@Override
 			public void onMessage(JSONObject json, IOAcknowledge ack) {
-
+				MessageHandler(json,ack);
 			}
 
 			@Override
 			public void onMessage(String data, IOAcknowledge ack) {
-				DEBUG("message:" + data);
+				MessageHandler(data,ack);				
 			}
 
 			@Override
 			public void onError(SocketIOException socketIOException) {
-				socketIOException.printStackTrace();
-				if (!"dj".equals(character)) {
-					return;
-				}
-				logLoopVal(loopVal);
+				ErrorHandler(socketIOException);				
 			}
 
 			@Override
 			public void onDisconnect() {
-				if (!"dj".equals(character)) {
-					return;
-				}
-				atRoom = false;
-				logLoopVal(loopVal);
-				if (taskComplete && cascadeRobot != null) {
-					new Thread(cascadeRobot).start();
-				}
+				DisconnectHandler();
 			}
 
 			@Override
 			public void onConnect() {
+				ConnectHandler();
 			}
 
 			@Override
 			public void on(String event, IOAcknowledge ack, Object... args) {
-				DEBUG("event@" + uid + ":" + event);
-				if (!"dj".equals(character)) {
-					return;
-				}
-				if ("LeaveRoom".equals(event)) {
-					try {
-						JSONArray json = new JSONArray(args);
-						JSONObject job = json.getJSONObject(0);
-						DEBUG(job.toString());
-						JSONArray userArray = job.getJSONArray("users");
-						userCount = userArray.length();
-						DEBUG("userCount:" + userCount);
-					} catch (JSONException e) {
-						e.printStackTrace();
-					}
-				}
-				if ("EnterRoom".equals(event)) {
-					try {
-						JSONArray json = new JSONArray(args);
-						JSONObject job = json.getJSONObject(0);
-						JSONObject roomO = job.getJSONObject("room");
-						JSONArray userArray = roomO.getJSONArray("users");
-						userCount = userArray.length();
-						DEBUG("userCount:" + userCount);
-						for (int i = 0; i < userArray.length(); i++) {
-							JSONObject userO = userArray.getJSONObject(i);
-							if (uid.equals(userO.getString("user_id"))) {
-								atRoom = true;
-								if (startLoopVal == -1) {
-									startLoopVal = userO.getInt("loop");
-									logLoopVal(startLoopVal);
-								}
-								loopVal = userO.getInt("loop");
-								if (loopVal - startLoopVal >= maxLoopVal) {
-									taskComplete = true;
-									logLoopVal(loopVal);
-									leaveDJ();
-								}
-								try {
-									playListCount = userO.getString("playlist")
-											.length() == 0 ? 0
-											: userO.getString("playlist")
-													.split(",").length;
-								} catch (JSONException e1) {
-									playListCount = 0;
-								}
-								if (playListCount <= 0) {
-									addSongToPlaylist("1768969254");
-								} else if (!isDJ) {
-									setDJ();
-								}
-								break;
-							}
-						}
-					} catch (JSONException e) {
-						e.printStackTrace();
-					}
-				}
-				if ("AddPlaylist".equals(event)) {
-					playListCount += 1;
-					if (atRoom && !isDJ && "dj".equals(character)) {
-						setDJ();
-					}
-				}
-				if ("SetDJ".equals(event)) {
-					try {
-						JSONArray json = new JSONArray(args);
-						JSONObject job = json.getJSONObject(0);
-						if (job.getString("user_id").equals(uid)) {
-							isDJ = true;
-							if (playSignal) {
-								startAutoPlayTask();
-							} else {
-								playNext();
-							}
-						}
-					} catch (JSONException e) {
-						e.printStackTrace();
-					}
-				}
-
-				if ("LeaveDJ".equals(event)) {
-					isDJ = false;
-					socket.disconnect();
-				}
-
-				if ("UpdateUser".equals(event)) {
-					try {
-						JSONArray json = new JSONArray(args);
-						JSONObject job = json.getJSONObject(0);
-						DEBUG("update " + uid);
-						if (job.getString("user_id").equals(uid)) {
-							loopVal = job.getInt("loop");
-							DEBUG("loop val : " + loopVal);
-							if (loopVal - startLoopVal >= maxLoopVal) {
-								taskComplete = true;
-								logLoopVal(loopVal);
-								leaveDJ();
-							}
-						} else {
-							// do nothing
-						}
-					} catch (JSONException e) {
-						e.printStackTrace();
-					}
-				}
+				EventHandler(event,ack,args);				
 			}
 		});
 		return true;
@@ -410,117 +295,32 @@ public class XMRobot implements Runnable {
 		
 	}
 	
-	private void DEBUG(String output) {
-		if (show_log >= 1) {
+	protected void DEBUG(String output) {
+		if (showLog >= 1) {
 			System.out.println("[DEBUG] " + output);
 		}
 	}
-
-	private void logLoopVal(int loopVal) {
-		try {
-			if (loopVal != -1) {
-				DataHandler.appendFile(time.format(new Date()) + "=" + loopVal
-						+ "\n", XMDriver.root+"/config/log/." + uid);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public boolean leaveDJ() {
-		Map<String, String> jsonMap = new HashMap<String, String>();
-		jsonMap.put("user_id", this.uid);
-		socket.emit("LeaveDJ", jsonMap);
-		return true;
-	}
-
-	public boolean addSongToPlaylist(String songId) {
-		Map<String, String> jsonMap = new HashMap<String, String>();
-		jsonMap.put("song_id", songId);
-		socket.emit("AddPlaylist", jsonMap);
-		return true;
-	}
-
-	public boolean setDJ() {
-		Map<String, String> setDJMap = new HashMap<String, String>();
-		setDJMap.put("user_id", this.uid);
-		setDJMap.put("nick_name", this.nick);
-		setDJMap.put("room_id", this.room + "");
-		setDJMap.put("code", this.parsedMemberAuth);
-		this.socket.emit("SetDJ", setDJMap);
-		return true;
-	}
-	
-	public boolean playNext() {
-		System.out.println("startLoop:"+startLoopVal);
-		Map<String, String> jsonMap = new HashMap<String, String>();
-		jsonMap.put("user_id", this.uid);
-		jsonMap.put("room_id", this.room + "");
-		jsonMap.put("code", this.parsedMemberAuth);
-		DEBUG("userCount:" + userCount + " startLoop:" + startLoopVal
-				+ " curLoop:" + loopVal);
-		this.socket.emit("PlayNext", jsonMap);
-		return true;
-	}
-	
-	private boolean playSignal = false;
-	
-	public void stopAutoPlay() {
-		if (this.playSignal == true) {
-			this.playSignal = false;
-			if (this.playThread != null) {
-				this.playThread.setSignal(this.chatSignal);
-			}
-		}
-	}
-	
-	public boolean startAutoPlayTask() {
-		System.out.println("startLoop:"+startLoopVal);
-		Map<String, String> jsonMap = new HashMap<String, String>();
-		jsonMap.put("user_id", this.uid);
-		jsonMap.put("room_id", this.room + "");
-		jsonMap.put("code", this.parsedMemberAuth);		
-		playThread = new XMTaskThread(socket,
-				this.auto_next_period * 1000, "PlayNext", jsonMap, playSignal);
-		new Thread(playThread).start();
-		return true;
-	}
-	
-	private boolean rateSignal = false;
 	
 	public void startRateTask() {
 		// good-or-bad task
-		if (this.rate == 0) {
-			this.rateSignal = false;
-			return;
-		}
 		Map<String, String> gbParams = new HashMap<String, String>();
 		gbParams.put("v", this.rate + "");
 		gbParams.put("code", this.parsedMemberAuth);
-		rateThread = new XMTaskThread(socket, this.rate_period * 1000,
+		rateThread = new XMTaskThread(socket, this.ratePeriod * 1000,
 				"GoodOrBad", gbParams, rateSignal);
 		new Thread(rateThread).start();
 	}
-
-	private String chatMessage = "";
 	
 	public void setChatPeriod(int period) {
-		this.chat_period = period;
+		this.chatPeriod = period;
 		if (this.chatThread != null) {
-			this.chatThread.setPeriod(this.chat_period);
+			this.chatThread.setPeriod(this.chatPeriod);
 		}
 	}
 	public void setRatePeriod(int period) {
-		this.rate_period = period;
+		this.ratePeriod = period;
 		if (this.rateThread != null) {
-			this.rateThread.setPeriod(this.rate_period);
-		}
-	}
-	
-	public void setPlayPeriod(int period) {
-		this.auto_next_period = period;
-		if (this.playThread != null) {
-			this.playThread.setPeriod(this.auto_next_period);
+			this.rateThread.setPeriod(this.ratePeriod);
 		}
 	}
 	
@@ -541,10 +341,6 @@ public class XMRobot implements Runnable {
 		}
 	}
 	
-	private XMTaskThread chatThread = null;
-	private XMTaskThread rateThread = null;
-	private XMTaskThread playThread = null;
-	
 	public void stopRate() {
 		if (this.rateSignal == true) {
 			this.rateSignal = false;
@@ -564,10 +360,6 @@ public class XMRobot implements Runnable {
 	
 	public boolean startChatTask() {
 		// chat task
-		if (this.chatMessage == null || this.chatMessage.length() == 0) {
-			this.chatSignal = false;
-			return false;
-		}
 		Map<String, String> chatParams = new HashMap<String, String>();
 		chatParams.put("user_id", this.uid);
 		chatParams.put("nick_name", this.nick);
@@ -575,7 +367,7 @@ public class XMRobot implements Runnable {
 		chatParams.put("room_id", this.room + "");
 		chatParams.put("msg", this.chatMessage);
 		chatThread = new XMTaskThread(socket,
-				this.chat_period * 1000, "CommonMsg", chatParams, chatSignal);
+				this.chatPeriod * 1000, "CommonMsg", chatParams, chatSignal);
 		new Thread(chatThread).start();
 		return true;
 	}
@@ -596,7 +388,7 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.err.println("pay attention fail!");
+			System.err.println(this.id+" pay attention to "+uid+" fail!");
 			return false;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
@@ -615,14 +407,14 @@ public class XMRobot implements Runnable {
 		try {
 			if (this.loginLoop() && this.visitXMWithAuth() && this.uid != null
 					&& this.nick != null) {
-				if (DataHandler.getFileSize(XMDriver.root+"/config/profile/" + this.uid) <= 0) {
+				if (DataHandler.getFileSize(XMDriver.root+XMDriver.profileDir+ this.uid) <= 0) {
 					DEBUG("uid:" + this.uid + " updating");
 					List<String> profile = new ArrayList<String>();
 					profile.add("uid=" + this.uid);
 					profile.add("nick=" + this.nick);
 					profile.add("account=" + this.id);
 					profile.add("password=" + this.pw);
-					DataHandler.writeFile(profile, XMDriver.root+"/config/profile/"
+					DataHandler.writeFile(profile, XMDriver.root+XMDriver.profileDir
 							+ this.uid);
 				} else {
 					DEBUG("uid:" + this.uid + " updated.");
@@ -639,70 +431,21 @@ public class XMRobot implements Runnable {
 
 	@Override
 	public void run() {
-		System.out.println("start " + character + " : " + this.id);
 		if (this.updateUidNick()) {
 			DEBUG("uid:" + uid + ", nick:" + nick);
 			try {
-				this.enterLoopRoom(this.room + "");
-				for (String task : this.taskList) {
-					switch (task) {
-					case "rate":
-						this.rateSignal = true;
-						this.startRateTask();
-						break;
-					case "chat":
-						this.chatSignal = true;
-						this.startChatTask();
-						break;
-					case "auto_next":
-						this.playSignal = true;
-						break;
-					default:
-						break;
-					}
-				}
+				this.enterLoopRoom(this.room);				
 			} catch (IOException | InterruptedException e) {
 				e.printStackTrace();
 			}
 		} else {
-			System.err.println("uid:"+uid+" update nick and uid fail.");
+			System.err.println(this.id+" update nick and uid fail.");
 		}
 	}
-
-	private List<String> taskList;
-	private boolean chatSignal = false;
 	
-	private class XMTaskThread implements Runnable {
-		private SocketIO socket = null;
-		private long interval = Integer.MAX_VALUE;
-		private String event = null;
-		private Map<String, String> jsonParams;
-		private boolean signal = false;
-		XMTaskThread(SocketIO socket, int interval, String event,
-				Map<String, String> jsonParams, boolean signal) {
-			this.socket = socket;
-			this.interval = interval <= 1000 ? 1000 : interval;
-			this.event = event;
-			this.jsonParams = jsonParams;
-			this.signal = signal;
-		}
-
-		@Override
-		public void run() {
-			while (signal == true && this.socket != null) {
-				this.socket.emit(event, jsonParams);
-				try {
-					Thread.sleep(interval);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-		public void setSignal(boolean signal) {
-			this.signal = signal;
-		}
-		public void setPeriod(int period) {
-			this.interval = period;
+	public void stopConnect() {
+		if (this.socket != null) {
+			this.socket.disconnect();
 		}
 	}
 }
