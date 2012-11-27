@@ -1,27 +1,20 @@
 package org.haibara.autoxm;
 
 import info.clearthought.layout.TableLayout;
-import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 
 import javax.swing.JButton;
-import javax.swing.JDesktopPane;
 import javax.swing.JLabel;
 
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 
 import org.jdesktop.application.SingleFrameApplication;
@@ -63,7 +56,6 @@ public class MainFrame extends SingleFrameApplication {
 			topPanel.setLayout(topPanelLayout);
 			getMainFrame().getContentPane().add(topPanel);
 			topPanel.setPreferredSize(new java.awt.Dimension(364, 331));
-			topPanel.setLocale(new java.util.Locale("zh"));
 			{
 				chatLabel = new JLabel();
 				topPanel.add(chatLabel, "0,1,c,c");
@@ -86,13 +78,15 @@ public class MainFrame extends SingleFrameApplication {
 			}
 			{
 				jScrollPane1 = new JScrollPane();
-				topPanel.add(jScrollPane1, "0, 4, 3, 4");
+				topPanel.add(jScrollPane1, "0,4,3,4,f,f");
+				jScrollPane1.setName("jScrollPane1");
+				jScrollPane1.getVerticalScrollBar().setAutoscrolls(true);
+				jScrollPane1.getHorizontalScrollBar().setAutoscrolls(true);
+				jScrollPane1.setPreferredSize(new java.awt.Dimension(273, 224));
 				{
 					jTextArea1 = new JTextArea();
 					jScrollPane1.setViewportView(jTextArea1);
 					jTextArea1.setName("jTextArea1");
-					jTextArea1.setLocale(new java.util.Locale("zh"));
-					jTextArea1.setPreferredSize(new java.awt.Dimension(273, 224));
 				}
 			}
 			{
@@ -103,13 +97,11 @@ public class MainFrame extends SingleFrameApplication {
 			{
 				jTextField1 = new JTextField();
 				topPanel.add(jTextField1, "1,2,2,2,f,c");
-				jTextField1.setLocale(new java.util.Locale("zh"));
 			}
 			{
 				jButton1 = new JButton();
 				topPanel.add(jButton1, "3,2,c,c");
 				jButton1.setName("jButton1");
-				jButton1.setLocale(new java.util.Locale("zh"));
 				jButton1.addActionListener(new ActionListener() {
 					public void actionPerformed(ActionEvent evt) {
 						jButton1ActionPerformed(evt);
@@ -185,8 +177,6 @@ public class MainFrame extends SingleFrameApplication {
 		}
 		
 	}
-	
-	
 	
 	private void chatButtonActionPerformed(ActionEvent evt) {
 		if (chatState == true) {
