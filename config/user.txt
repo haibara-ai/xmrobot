@@ -26,8 +26,6 @@ user=haibara7@qq.com,password=hunter
 user=haibara8@qq.com,password=hunter
 user=haibara9@qq.com,password=hunter
 user=haibara10@qq.com,password=hunter
-user=hunter10@qq.com,password=hunter
-user=hunter11@qq.com,password=hunter
 user=neofolk1@qq.com,password=hunter
 user=neofolk2@qq.com,password=hunter
 user=neofolk3@qq.com,password=hunter

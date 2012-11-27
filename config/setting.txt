@@ -2,18 +2,18 @@
 mode=3
 
 # dj config
-dj_room=73863
+dj_room=78966
 #dj_rate=1, dj rate good; dj_rate=0, dj not rate; dj_rate=-1, dj rate bad;
 dj_rate=0
 dj_rate_period=100
 dj_chat_period=0
-dj_count=4
+dj_count=1
 #max loop value each day
-dj_max_loop=700
+dj_max_loop=50
 auto_next_period=50
 
 # audience config
-audience_room=73863
+audience_room=78966
 #audience_rate same with dj_rate
 audience_rate=1
 audience_rate_period=100
@@ -21,6 +21,6 @@ audience_chat_period=5
 audience_count=10
 
 # common config
-show_dj_log=1
-show_audience_log=0
+show_dj_log=2
+show_audience_log=2
 login_gap=1000
