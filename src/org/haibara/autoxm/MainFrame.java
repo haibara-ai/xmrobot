@@ -2,9 +2,13 @@ package org.haibara.autoxm;
 
 import info.clearthought.layout.TableLayout;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -46,11 +50,14 @@ public class MainFrame extends SingleFrameApplication {
 
 	@Override
 	protected void startup() {
-		FlowLayout mainFrameLayout = new FlowLayout();
+		GridLayout mainFrameLayout = new GridLayout(1, 1);
+		mainFrameLayout.setHgap(5);
+		mainFrameLayout.setVgap(5);
+		mainFrameLayout.setColumns(1);
 		getMainFrame().getContentPane().setLayout(mainFrameLayout);
 		{
 			topPanel = new JPanel();
-			TableLayout topPanelLayout = new TableLayout(new double[][] {{70.0, TableLayout.FILL, 142.0, TableLayout.FILL}, {14.0, 35.0, 47.0, 11.0, TableLayout.FILL}});
+			TableLayout topPanelLayout = new TableLayout(new double[][] {{70.0, TableLayout.FILL, 142.0, TableLayout.FILL}, {7.0, 35.0, 38.0, 4.0, TableLayout.FILL}});
 			topPanelLayout.setHGap(5);
 			topPanelLayout.setVGap(5);
 			topPanel.setLayout(topPanelLayout);
@@ -85,6 +92,7 @@ public class MainFrame extends SingleFrameApplication {
 					jScrollPane1.setViewportView(jTextArea1);
 					jTextArea1.setName("jTextArea1");
 					jTextArea1.setLocale(new java.util.Locale("zh"));
+					jTextArea1.setPreferredSize(new java.awt.Dimension(273, 224));
 				}
 			}
 			{
@@ -177,6 +185,8 @@ public class MainFrame extends SingleFrameApplication {
 		}
 		
 	}
+	
+	
 	
 	private void chatButtonActionPerformed(ActionEvent evt) {
 		if (chatState == true) {

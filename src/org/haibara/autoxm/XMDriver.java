@@ -2,16 +2,12 @@ package org.haibara.autoxm;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MaximizeAction;
 
 import org.haibara.io.DataHandler;
 
@@ -19,13 +15,12 @@ public class XMDriver {
 
 	protected static String root = "";
 	protected static boolean taskComplete = false;
-	private static Calendar calendar = new GregorianCalendar();
 	protected final static String configDir = "/config/";
-	protected final static String logDir = configDir+"/log/";
-	protected final static String profileDir = configDir+"/profile/";
+	protected final static String logDir = configDir + "/log/";
+	protected final static String profileDir = configDir + "/profile/";
 	protected final static String userFilePath = configDir + "/user.txt";
 	protected final static String settingFilePath = configDir + "/setting.txt";
-	
+
 	@SuppressWarnings("unchecked")
 	private static Map<String, List<Map<String, String>>> loadUser(String path) {
 		Map<String, List<Map<String, String>>> ret = new HashMap<String, List<Map<String, String>>>();
@@ -150,25 +145,12 @@ public class XMDriver {
 							}
 						}
 					} else {
-						calendar.setTime(new Date());
-						calendar.add(Calendar.DATE, -1);
-						String yesterday = day.format(calendar.getTime());
-						if (content.get(i).startsWith(yesterday)) {
-							int startLoop = Integer.parseInt(content.get(i)
-									.substring(lastLine.indexOf("=") + 1));
-							if (lastLoop - startLoop >= maxLoop) {
-								return Integer.MAX_VALUE;
-							} else {
-								return startLoop;
-							}
+						int startLoop = Integer.parseInt(content.get(i + 1)
+								.substring(lastLine.indexOf("=") + 1));
+						if (lastLoop - startLoop >= maxLoop) {
+							return Integer.MAX_VALUE;
 						} else {
-							int startLoop = Integer.parseInt(content.get(i+1).substring(
-									lastLine.indexOf("=") + 1));
-							if (lastLoop - startLoop >= maxLoop) {
-								return Integer.MAX_VALUE;
-							} else {
-								return startLoop;
-							}
+							return startLoop;
 						}
 					}
 				}
@@ -188,26 +170,29 @@ public class XMDriver {
 			}
 		}
 	}
-	public void setAudienceChatPeriod(int period) {	
+
+	public void setAudienceChatPeriod(int period) {
 		if (period <= 0) {
 			return;
 		}
 		for (XMRobot robot : audienceList) {
 			if (robot != null) {
-				robot.setChatPeriod(period*1000);
+				robot.setChatPeriod(period * 1000);
 			}
 		}
 	}
+
 	public void setAudienceRatePeriod(int period) {
 		if (period <= 0) {
 			return;
 		}
 		for (XMRobot robot : audienceList) {
 			if (robot != null) {
-				robot.setRatePeriod(period*1000);
+				robot.setRatePeriod(period * 1000);
 			}
 		}
 	}
+
 	public void setAudienceRate(int rate) {
 		for (XMAudience robot : audienceList) {
 			if (robot != null) {
@@ -215,7 +200,7 @@ public class XMDriver {
 			}
 		}
 	}
-	
+
 	public void stopAudienceChat() {
 		for (XMAudience robot : audienceList) {
 			if (robot != null) {
@@ -223,7 +208,7 @@ public class XMDriver {
 			}
 		}
 	}
-	
+
 	private int djCount = 0;
 	private int maxLoop = 0;
 	private int audienceCount = 0;
@@ -231,16 +216,15 @@ public class XMDriver {
 
 	private List<XMDJ> djList = new ArrayList<XMDJ>();
 	private List<XMAudience> audienceList = new ArrayList<XMAudience>();
-	private Map<String,String> djProperties = new HashMap<String, String>();
-	private Map<String,String> audienceProperties = new HashMap<String, String>();
-	
+	private Map<String, String> djProperties = new HashMap<String, String>();
+	private Map<String, String> audienceProperties = new HashMap<String, String>();
+
 	public void start() throws InterruptedException {
 		Map<String, List<Map<String, String>>> users = XMDriver.loadUser(root
 				+ userFilePath);
 		Map<String, String> settings = XMDriver.loadSetting(root
 				+ settingFilePath);
-		Map<String, String> profiles = XMDriver.loadProfile(root
-				+ profileDir);
+		Map<String, String> profiles = XMDriver.loadProfile(root + profileDir);
 		mode = Integer.parseInt(settings.get("mode"));
 		maxLoop = Integer.parseInt(settings.get("dj_max_loop"));
 		djProperties.put("show_log", settings.get("show_dj_log"));
@@ -251,14 +235,16 @@ public class XMDriver {
 		djProperties.put("max_loop_val", settings.get("dj_max_loop"));
 		djProperties.put("chat_period", settings.get("dj_chat_period"));
 		djProperties.put("rate_period", settings.get("dj_rate_period"));
-		
+
 		audienceProperties.put("show_log", settings.get("show_audience_log"));
 		audienceProperties.put("mode", settings.get("mode"));
 		audienceProperties.put("rate", settings.get("audience_rate"));
 		audienceProperties.put("room", settings.get("audience_room"));
-		audienceProperties.put("chat_period", settings.get("audience_chat_period"));
-		audienceProperties.put("rate_period", settings.get("audience_rate_period"));
-		
+		audienceProperties.put("chat_period",
+				settings.get("audience_chat_period"));
+		audienceProperties.put("rate_period",
+				settings.get("audience_rate_period"));
+
 		if (mode == 0) {
 			djCount = users.get("dj").size();
 			audienceCount = users.get("audience").size();
@@ -284,35 +270,36 @@ public class XMDriver {
 		System.out.println("dj count:" + djCount);
 		System.out.println("audience count:" + audienceCount);
 		Set<String> djSet = new HashSet<String>();
-		// start dj		
+		// start dj
 		for (Map<String, String> user : users.get("dj")) {
 			if (djSet.size() >= djCount) {
 				break;
 			}
 			djSet.add(user.get("user"));
 			int startLoopVal = loadLoopLog(
-					root + logDir +"." + profiles.get(user.get("user")),
+					root + logDir + "." + profiles.get(user.get("user")),
 					maxLoop);
 			if (startLoopVal == Integer.MAX_VALUE) {
 				System.out.println(profiles.get(user.get("user"))
 						+ " task completed");
 				continue;
 			}
-			djProperties.put("start_loop_val", startLoopVal+"");
-			XMDJ robot = new XMDJ(user.get("user"), user.get("password"),djProperties);
+			djProperties.put("start_loop_val", startLoopVal + "");
+			XMDJ robot = new XMDJ(user.get("user"), user.get("password"),
+					djProperties);
 			djList.add(robot);
 		}
 		for (int i = 0; i < djList.size() - 1; i++) {
 			djList.get(i).addCascadeDJ(djList.get(i + 1));
-		}		
+		}
 		if (djList.size() > 0) {
-			djList.get(djList.size()-1).setXMDriver(this);			
+			djList.get(djList.size() - 1).setXMDriver(this);
 			new Thread(djList.get(0)).start();
-		} else if (mode == 3 || mode == 1){
+		} else if (mode == 3 || mode == 1) {
 			taskComplete = true;
 			this.notifyExit();
 			return;
-		}		
+		}
 		// start audience
 		Set<String> audienceSet = new HashSet<String>();
 		for (Map<String, String> user : users.get("audience")) {
@@ -323,7 +310,8 @@ public class XMDriver {
 			if (djSet.contains(user.get("user"))) {
 				continue;
 			}
-			XMAudience robot = new XMAudience(user.get("user"), user.get("password"),audienceProperties);
+			XMAudience robot = new XMAudience(user.get("user"),
+					user.get("password"), audienceProperties);
 			audienceList.add(robot);
 			new Thread(robot).start();
 			Thread.sleep(Integer.parseInt(settings.get("login_gap")));
@@ -334,33 +322,33 @@ public class XMDriver {
 			return;
 		}
 	}
-	
+
 	private MainFrame notifier = null;
-	
+
 	public void setNotifier(MainFrame frame) {
 		this.notifier = frame;
 	}
-	
+
 	protected void notifyExit() {
 		if (this.notifier != null) {
 			this.notifier.exit();
 		}
 	}
-	
+
 	public XMDJ getCurrentDJ() {
-		for (XMDJ dj: djList) {
+		for (XMDJ dj : djList) {
 			if (dj != null && dj.atRoom) {
 				return dj;
 			}
 		}
 		return null;
 	}
-	
+
 	protected void exit() {
 		this.stopALLAudience();
 		this.notifyExit();
 	}
-	
+
 	public void stopALLAudience() {
 		for (XMAudience robot : audienceList) {
 			if (robot != null) {
