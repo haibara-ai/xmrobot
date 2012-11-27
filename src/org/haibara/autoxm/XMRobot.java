@@ -189,6 +189,7 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+//		get.addHeader("Accept-Charset",acceptCharsetHeader);
 		get.addHeader("Referer", "http://www.xiami.com/");
 		get.addHeader("Cookie", "member_auth=" + this.memberAuth
 				+ ";t_sign_auth=2;");
@@ -199,7 +200,7 @@ public class XMRobot implements Runnable {
 			return false;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent()));
+				.getEntity().getContent(),"UTF-8"));
 		String line = "";
 		StringBuffer page = new StringBuffer();
 		while ((line = br.readLine()) != null) {

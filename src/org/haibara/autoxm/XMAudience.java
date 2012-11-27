@@ -34,7 +34,6 @@ public class XMAudience extends XMRobot{
 		super.EventHandler(event, ack, args);
 		if (!initialized) {
 			atRoom = true;
-			DEBUG("I am here "+this.uid+" rate:"+this.rate+" period:"+this.ratePeriod);
 			if (this.rate == 0 || this.ratePeriod < 30) {
 				this.rateSignal = false;
 			} else {
