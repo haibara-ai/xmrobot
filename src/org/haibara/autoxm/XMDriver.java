@@ -1,5 +1,6 @@
 package org.haibara.autoxm;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.http.client.ClientProtocolException;
 import org.haibara.io.DataHandler;
 
 public class XMDriver {
@@ -213,6 +215,7 @@ public class XMDriver {
 	private int maxLoop = 0;
 	private int audienceCount = 0;
 	private int mode = -1;
+	private String payAttention = "";
 
 	private List<XMDJ> djList = new ArrayList<XMDJ>();
 	private List<XMAudience> audienceList = new ArrayList<XMAudience>();
@@ -227,6 +230,7 @@ public class XMDriver {
 		Map<String, String> profiles = XMDriver.loadProfile(root + profileDir);
 		mode = Integer.parseInt(settings.get("mode"));
 		maxLoop = Integer.parseInt(settings.get("dj_max_loop"));
+		payAttention = settings.get("pay_attention");
 		djProperties.put("show_log", settings.get("show_dj_log"));
 		djProperties.put("mode", settings.get("mode"));
 		djProperties.put("auto_next_period", settings.get("auto_next_period"));
@@ -269,7 +273,32 @@ public class XMDriver {
 
 		System.out.println("dj count:" + djCount);
 		System.out.println("audience count:" + audienceCount);
-		Set<String> djSet = new HashSet<String>();
+		if (mode == 0) {
+			System.out.println("Pay attention to " + payAttention);
+			for (Map<String, String> user : users.get("dj")) {
+				XMRobot robot = new XMRobot(user.get("user"), user.get("password"),
+						djProperties);
+				try {
+					robot.loginXM();
+					robot.payAttention(payAttention);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+			for (Map<String, String> user : users.get("audience")) {
+				XMRobot robot = new XMRobot(user.get("user"), user.get("password"),
+						audienceProperties);
+				try {
+					robot.loginXM();
+					robot.payAttention(payAttention);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+			System.out.println("Pay attention end!");
+			return;
+		}
+		Set<String> djSet = new HashSet<String>();		
 		// start dj
 		for (Map<String, String> user : users.get("dj")) {
 			if (djSet.size() >= djCount) {

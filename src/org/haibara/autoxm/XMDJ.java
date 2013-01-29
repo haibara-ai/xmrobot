@@ -65,6 +65,7 @@ public class XMDJ extends XMAudience{
 	public void DisconnectHandler() {
 		atRoom = false;
 		logLoopVal(loopVal);
+		System.out.println(time.format(new Date())+", "+this.nick+" endLoop:"+loopVal);
 		if (cascadeDJ != null) {
 			this.stopWork();
 			new Thread(cascadeDJ).start();
@@ -148,7 +149,7 @@ public class XMDJ extends XMAudience{
 					if (autoPlaySignal) {
 						startAutoPlayTask();
 					} else {
-						playNext();
+						manualPlayNext();
 					}
 				}
 			} catch (JSONException e) {
@@ -224,8 +225,8 @@ public class XMDJ extends XMAudience{
 		return true;
 	}
 	
-	public boolean playNext() {
-		System.out.println(this.nick+" startLoop:"+startLoopVal);
+	public boolean manualPlayNext() {
+		System.out.println(time.format(new Date())+", "+this.nick+" startLoop:"+loopVal);
 		Map<String, String> jsonMap = new HashMap<String, String>();
 		jsonMap.put("user_id", this.uid);
 		jsonMap.put("room_id", this.room + "");
@@ -246,7 +247,7 @@ public class XMDJ extends XMAudience{
 	}
 	
 	public boolean startAutoPlayTask() {
-		System.out.println(this.nick+" startLoop:"+startLoopVal);
+		System.out.println(time.format(new Date())+", "+this.nick+" startLoop:"+loopVal);
 		Map<String, String> jsonMap = new HashMap<String, String>();
 		jsonMap.put("user_id", this.uid);
 		jsonMap.put("room_id", this.room + "");

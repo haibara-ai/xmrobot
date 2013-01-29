@@ -385,11 +385,10 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
 		get.addHeader("Cookie", "member_auth=" + this.memberAuth
 				+ ";t_sign_auth=2;");
-		System.out.println(get.getRequestLine());
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.err.println(this.id+" pay attention to "+uid+" fail!");
+			System.out.println(this.id+" pay attention to "+uid+" fail!");
 			return false;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
