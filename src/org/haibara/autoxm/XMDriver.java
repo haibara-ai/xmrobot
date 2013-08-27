@@ -216,6 +216,7 @@ public class XMDriver {
 	private int audienceCount = 0;
 	private int mode = -1;
 	private String payAttention = "";
+	private int loopTarget = 0;
 
 	private List<XMDJ> djList = new ArrayList<XMDJ>();
 	private List<XMAudience> audienceList = new ArrayList<XMAudience>();

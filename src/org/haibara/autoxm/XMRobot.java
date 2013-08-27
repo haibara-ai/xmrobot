@@ -56,6 +56,9 @@ public class XMRobot implements Runnable {
 	protected final String connectionHeader = "keep-alive";
 	protected final String contentTypeHeader = "application/x-www-form-urlencoded";
 	protected final String socketioHostHeader = "sio.xiami.com";
+
+//	private static final String memberAuthKey = "member_auth";
+	private static final String memberAuthKey = "_xiamitoken";
 	
 	protected String chatMessage = "";
 
@@ -139,7 +142,7 @@ public class XMRobot implements Runnable {
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
 		String authCookie = cookie.substring(
-				cookie.indexOf("member_auth=") + 12, cookie.indexOf(";"));
+				cookie.indexOf(memberAuthKey+"=") + (memberAuthKey+"=").length(), cookie.indexOf(";"));
 		response.getEntity().consumeContent();
 		this.memberAuth = authCookie;
 		this.parsedMemberAuth = this.memberAuth.replace("%2B", "+").replace(
@@ -172,7 +175,7 @@ public class XMRobot implements Runnable {
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
 		String authCookie = cookie.substring(
-				cookie.indexOf("member_auth=") + 12, cookie.indexOf(";"));
+				cookie.indexOf(memberAuthKey+"=") + (memberAuthKey+"=").length(), cookie.indexOf(";"));
 		this.memberAuth = authCookie;
 		this.parsedMemberAuth = this.memberAuth.replace("%2B", "+").replace(
 				"%2F", "/");
@@ -189,9 +192,8 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-//		get.addHeader("Accept-Charset",acceptCharsetHeader);
 		get.addHeader("Referer", "http://www.xiami.com/");
-		get.addHeader("Cookie", "member_auth=" + this.memberAuth
+		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
 				+ ";t_sign_auth=2;");
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
@@ -224,7 +226,8 @@ public class XMRobot implements Runnable {
 		DEBUG("message:" + data);
 	}
 	public void ErrorHandler(SocketIOException socketIOException) {
-		socketIOException.printStackTrace();
+		System.err.println(this.nick + " 掉线了！");
+//		socketIOException.printStackTrace();
 	}
 	
 	public void DisconnectHandler() {
@@ -242,7 +245,7 @@ public class XMRobot implements Runnable {
 		String roomUrl = defaultProtocol + "://" + socketioHost + "/room?id="
 				+ roomId;
 		if (this.memberAuth == null || "".equals(memberAuth)) {
-			System.err.println("invalid member_auth");
+			System.err.println("invalid " + memberAuthKey);
 			return false;
 		}
 		HttpGet handshakeGet = new HttpGet();
@@ -252,7 +255,7 @@ public class XMRobot implements Runnable {
 		handshakeGet.addHeader("Accept-Language", acceptLanguageHeader);
 		handshakeGet.addHeader("Connection", connectionHeader);
 		handshakeGet.addHeader("Referer", loopRoomUrl + roomId);
-		handshakeGet.addHeader("Cookie", "member_auth=" + this.memberAuth);
+		handshakeGet.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth);
 		Hacker hacker = new Hacker(this.memberAuth, roomId+"", client,
 				handshakeGet, this.showLog);
 
@@ -383,7 +386,7 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Cookie", "member_auth=" + this.memberAuth
+		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
 				+ ";t_sign_auth=2;");
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
@@ -434,8 +437,10 @@ public class XMRobot implements Runnable {
 		if (this.updateUidNick()) {
 			DEBUG("uid:" + uid + ", nick:" + nick);
 			try {
-				this.enterLoopRoom(this.room);				
-			} catch (IOException | InterruptedException e) {
+				this.enterLoopRoom(this.room);
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
 		} else {

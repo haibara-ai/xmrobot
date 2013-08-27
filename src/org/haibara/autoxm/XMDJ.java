@@ -191,13 +191,9 @@ public class XMDJ extends XMAudience{
 	}
 	
 	private void logLoopVal(int loopVal) {
-		try {
-			if (loopVal != -1) {
-				DataHandler.appendFile(time.format(new Date()) + "=" + loopVal
-						+ "\n", XMDriver.root+XMDriver.logDir+"." + uid);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (loopVal != -1) {
+			DataHandler.appendFile(time.format(new Date()) + "=" + loopVal
+					+ "\n", XMDriver.root+XMDriver.logDir+"." + uid);
 		}
 	}
 
