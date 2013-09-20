@@ -7,6 +7,7 @@ import java.awt.event.ActionListener;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.InvocationTargetException;
 
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -150,7 +151,13 @@ public class MainFrame extends SingleFrameApplication {
 		driver = new XMDriver();
 		driver.setNotifier(this);
 		try {
-			driver.start();
+			try {
+				driver.start();
+			} catch (NoSuchMethodException | SecurityException
+					| IllegalAccessException | IllegalArgumentException
+					| InvocationTargetException e) {
+				e.printStackTrace();
+			}
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -174,8 +181,7 @@ public class MainFrame extends SingleFrameApplication {
 			if (!this.jTextField1.getText().trim().isEmpty()) {
 				this.driver.setAudienceChatPeriod(Integer.parseInt(this.jTextField1.getText().trim()));
 			}
-		}
-		
+		}		
 	}
 	
 	private void chatButtonActionPerformed(ActionEvent evt) {

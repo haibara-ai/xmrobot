@@ -3,7 +3,6 @@ package org.haibara.autoxm;
 import io.socket.IOAcknowledge;
 import io.socket.SocketIOException;
 
-import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;

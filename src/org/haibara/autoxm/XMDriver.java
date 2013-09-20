@@ -1,6 +1,8 @@
 package org.haibara.autoxm;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -10,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.http.client.ClientProtocolException;
 import org.haibara.io.DataHandler;
 
 public class XMDriver {
@@ -22,6 +23,11 @@ public class XMDriver {
 	protected final static String profileDir = configDir + "/profile/";
 	protected final static String userFilePath = configDir + "/user.txt";
 	protected final static String settingFilePath = configDir + "/setting.txt";
+	private static Map<String,String> methodMap = new HashMap<>();
+	static {
+		methodMap.put("pay_attention", "payAttention");
+		methodMap.put("judge_comment", "judgeComment");		
+	}
 
 	@SuppressWarnings("unchecked")
 	private static Map<String, List<Map<String, String>>> loadUser(String path) {
@@ -215,15 +221,13 @@ public class XMDriver {
 	private int maxLoop = 0;
 	private int audienceCount = 0;
 	private int mode = -1;
-	private String payAttention = "";
-	private int loopTarget = 0;
 
 	private List<XMDJ> djList = new ArrayList<XMDJ>();
 	private List<XMAudience> audienceList = new ArrayList<XMAudience>();
 	private Map<String, String> djProperties = new HashMap<String, String>();
 	private Map<String, String> audienceProperties = new HashMap<String, String>();
 
-	public void start() throws InterruptedException {
+	public void start() throws InterruptedException, NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 		Map<String, List<Map<String, String>>> users = XMDriver.loadUser(root
 				+ userFilePath);
 		Map<String, String> settings = XMDriver.loadSetting(root
@@ -231,7 +235,6 @@ public class XMDriver {
 		Map<String, String> profiles = XMDriver.loadProfile(root + profileDir);
 		mode = Integer.parseInt(settings.get("mode"));
 		maxLoop = Integer.parseInt(settings.get("dj_max_loop"));
-		payAttention = settings.get("pay_attention");
 		djProperties.put("show_log", settings.get("show_dj_log"));
 		djProperties.put("mode", settings.get("mode"));
 		djProperties.put("auto_next_period", settings.get("auto_next_period"));
@@ -274,14 +277,15 @@ public class XMDriver {
 
 		System.out.println("dj count:" + djCount);
 		System.out.println("audience count:" + audienceCount);
-		if (mode == 0) {
-			System.out.println("Pay attention to " + payAttention);
+		if (mode == 0) {		
+			Method actionMethod = XMRobot.class.getMethod(methodMap.get(settings.get("action")),String.class);
 			for (Map<String, String> user : users.get("dj")) {
 				XMRobot robot = new XMRobot(user.get("user"), user.get("password"),
 						djProperties);
 				try {
 					robot.loginXM();
-					robot.payAttention(payAttention);
+					actionMethod.invoke(robot, settings.get(settings.get("action")));
+					Thread.sleep(100);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -291,12 +295,11 @@ public class XMDriver {
 						audienceProperties);
 				try {
 					robot.loginXM();
-					robot.payAttention(payAttention);
+					actionMethod.invoke(robot, settings.get(settings.get("action")));
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
-			System.out.println("Pay attention end!");
 			return;
 		}
 		Set<String> djSet = new HashSet<String>();		

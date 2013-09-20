@@ -375,7 +375,40 @@ public class XMRobot implements Runnable {
 		new Thread(chatThread).start();
 		return true;
 	}
-
+	
+	public boolean judgeComment(String cid) throws ClientProtocolException, IOException {
+		int fakeId = Integer.parseInt(cid);
+		int realId = Math.abs(fakeId);
+		int rate = fakeId > 0 ? 1 : -1;
+		HttpGet get = new HttpGet("http://loop.xiami.com/commentlist/ageree/?id="+realId+"&state="+rate+"&user_id="+this.uid+"&mode=ajax");
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept", "application/json, text/javascript, */*; q=0.01");
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("X-Requested-With","XMLHttpRequest");
+		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
+				+ ";t_sign_auth=1;");
+		HttpResponse response = client.execute(get);
+		int statusCode = response.getStatusLine().getStatusCode();
+		if (statusCode != 200) {
+			System.out.println(this.id+" judge comment to "+cid+" fail!");
+			return false;
+		}
+		BufferedReader br = new BufferedReader(new InputStreamReader(response
+				.getEntity().getContent()));
+		String line = "";
+		StringBuffer page = new StringBuffer();
+		while ((line = br.readLine()) != null) {
+			page.append(line);
+		}
+		String pageString = page.toString();
+		DEBUG(pageString);
+		System.out.println(this.id+" judge comment to "+cid+" success!");
+		return true;
+	}
+	
 	public boolean payAttention(String uid) throws ClientProtocolException,
 			IOException {
 		HttpGet get = new HttpGet("http://loop.xiami.com/member/attention/uid/"
@@ -403,6 +436,7 @@ public class XMRobot implements Runnable {
 		}
 		String pageString = page.toString();
 		DEBUG(pageString);
+		System.out.println(this.id+" pay attention to "+uid+" success!");
 		return true;
 	}
 
