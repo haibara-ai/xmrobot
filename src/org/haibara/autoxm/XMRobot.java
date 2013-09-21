@@ -9,6 +9,7 @@ import io.socket.SocketIOException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +29,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.haibara.io.DataHandler;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 public class XMRobot implements Runnable {
@@ -37,7 +39,8 @@ public class XMRobot implements Runnable {
 
 	protected HttpClient client = null;
 
-	protected SimpleDateFormat time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	protected SimpleDateFormat time = new SimpleDateFormat(
+			"yyyy-MM-dd HH:mm:ss");
 
 	protected final String socketioHost = "sio.xiami.com:80";
 	protected final String socketioHost_Alt = "sio.xiami.com:443";
@@ -57,15 +60,18 @@ public class XMRobot implements Runnable {
 	protected final String contentTypeHeader = "application/x-www-form-urlencoded";
 	protected final String socketioHostHeader = "sio.xiami.com";
 
-//	private static final String memberAuthKey = "member_auth";
-	private static final String memberAuthKey = "_xiamitoken";
-	
+	private static final Pattern judgeReturnPattern = Pattern
+			.compile("<strong>(.*?)</strong>");
+	private static final Pattern commentIdPattern = Pattern.compile("<li id=\"(.*?)\"");
+	// private static final String memberAuthKey = "member_auth";
+	private static final String xiamiTokenKey = "_xiamitoken";
+
 	protected String chatMessage = "";
 
 	protected final String loopRoomUrl = "http://loop.xiami.com/room/";
 
 	protected String defaultProtocol = "http";
-	
+
 	protected Pattern uidRe = Pattern
 			.compile(
 					"class=\"uico_home\"\\s+href=\"/u/([0-9]+)\"\\s+title=\".*?\\(.*?\\)\">",
@@ -77,7 +83,7 @@ public class XMRobot implements Runnable {
 
 	protected String uid = null;
 	protected String nick = null;
-	protected String memberAuth = null;
+	protected String xiamiToken = null;
 	protected String parsedMemberAuth = null;
 	protected SocketIO socket = null;
 	protected int room = 0;
@@ -88,33 +94,39 @@ public class XMRobot implements Runnable {
 	protected int rate = 0;
 	protected int ratePeriod = 0;
 	protected int chatPeriod = 0;
-	protected boolean rateSignal = false;	
+	protected boolean rateSignal = false;
 	protected boolean chatSignal = false;
-	protected XMTaskThread chatThread = null;
-	protected XMTaskThread rateThread = null;
-	
+	protected LoopTaskThread chatThread = null;
+	protected LoopTaskThread rateThread = null;
+
 	protected List<String> taskList;
-	protected Map<String,String> properties = null;
-	
-	public XMRobot(String id, String pw, Map<String,String> properties) {
+	protected Map<String, String> properties = null;
+
+	public XMRobot(String id, String pw, Map<String, String> properties) {
 		this.id = id;
 		this.pw = pw;
 		this.client = new DefaultHttpClient();
 		this.properties = properties;
-		this.room = Integer.parseInt(GetProperty("room"));
-		this.showLog = Integer.parseInt(GetProperty("show_log"));
-		this.rate = Integer.parseInt(GetProperty("rate"));
-		this.ratePeriod = Integer.parseInt(GetProperty("rate_period")) <= 0 ? 30 : Integer.parseInt(GetProperty("rate_period"));
-		this.chatPeriod = Integer.parseInt(GetProperty("chat_period")) <= 0 ? 5 : Integer.parseInt(GetProperty("chat_period"));
+		try {
+			this.room = Integer.parseInt(GetProperty("room"));
+			this.showLog = Integer.parseInt(GetProperty("show_log"));
+			this.rate = Integer.parseInt(GetProperty("rate"));
+			this.ratePeriod = Integer.parseInt(GetProperty("rate_period")) <= 0 ? 30
+					: Integer.parseInt(GetProperty("rate_period"));
+			this.chatPeriod = Integer.parseInt(GetProperty("chat_period")) <= 0 ? 5
+					: Integer.parseInt(GetProperty("chat_period"));
+		} catch (NumberFormatException nfe) {
+			// do nothing
+		}
 	}
-	
-	protected String GetProperty(String key){
+
+	protected String GetProperty(String key) {
 		if (this.properties == null || !this.properties.containsKey(key)) {
 			return "";
 		}
 		return this.properties.get(key);
 	}
-	
+
 	@SuppressWarnings("deprecation")
 	public boolean loginXM() throws ClientProtocolException, IOException {
 		HttpPost post = new HttpPost(loginXMUrl);
@@ -137,15 +149,16 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(post);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 302) {
-			System.err.println(this.id+" login xiami failed!");
+			System.err.println(this.id + " login xiami failed!");
 			return false;
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
 		String authCookie = cookie.substring(
-				cookie.indexOf(memberAuthKey+"=") + (memberAuthKey+"=").length(), cookie.indexOf(";"));
+				cookie.indexOf(xiamiTokenKey + "=")
+						+ (xiamiTokenKey + "=").length(), cookie.indexOf(";"));
 		response.getEntity().consumeContent();
-		this.memberAuth = authCookie;
-		this.parsedMemberAuth = this.memberAuth.replace("%2B", "+").replace(
+		this.xiamiToken = authCookie;
+		this.parsedMemberAuth = this.xiamiToken.replace("%2B", "+").replace(
 				"%2F", "/");
 		return true;
 	}
@@ -170,14 +183,15 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(post);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 302) {
-			System.err.println(this.id+" login loop failed!");
+			System.err.println(this.id + " login loop failed!");
 			return false;
 		}
 		String cookie = response.getFirstHeader("Set-Cookie").toString();
 		String authCookie = cookie.substring(
-				cookie.indexOf(memberAuthKey+"=") + (memberAuthKey+"=").length(), cookie.indexOf(";"));
-		this.memberAuth = authCookie;
-		this.parsedMemberAuth = this.memberAuth.replace("%2B", "+").replace(
+				cookie.indexOf(xiamiTokenKey + "=")
+						+ (xiamiTokenKey + "=").length(), cookie.indexOf(";"));
+		this.xiamiToken = authCookie;
+		this.parsedMemberAuth = this.xiamiToken.replace("%2B", "+").replace(
 				"%2F", "/");
 		response.getEntity().consumeContent();
 		return true;
@@ -193,16 +207,16 @@ public class XMRobot implements Runnable {
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
 		get.addHeader("Referer", "http://www.xiami.com/");
-		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
 				+ ";t_sign_auth=2;");
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.err.println(this.id+" visit xm failed!");
+			System.err.println(this.id + " visit xm failed!");
 			return false;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent(),"UTF-8"));
+				.getEntity().getContent(), "UTF-8"));
 		String line = "";
 		StringBuffer page = new StringBuffer();
 		while ((line = br.readLine()) != null) {
@@ -219,33 +233,37 @@ public class XMRobot implements Runnable {
 		}
 		return true;
 	}
-	
+
 	public void MessageHandler(JSONObject json, IOAcknowledge ack) {
 	}
+
 	public void MessageHandler(String data, IOAcknowledge ack) {
 		DEBUG("message:" + data);
 	}
+
 	public void ErrorHandler(SocketIOException socketIOException) {
 		System.err.println(this.nick + " 掉线了！");
-//		socketIOException.printStackTrace();
+		// socketIOException.printStackTrace();
 	}
-	
+
 	public void DisconnectHandler() {
-		
+
 	}
+
 	public void ConnectHandler() {
-		
+
 	}
+
 	public void EventHandler(String event, IOAcknowledge ack, Object... args) {
 		DEBUG("event@" + uid + ":" + event);
 	}
-	
+
 	public boolean enterLoopRoom(int roomId) throws IOException,
 			InterruptedException {
 		String roomUrl = defaultProtocol + "://" + socketioHost + "/room?id="
 				+ roomId;
-		if (this.memberAuth == null || "".equals(memberAuth)) {
-			System.err.println("invalid " + memberAuthKey);
+		if (this.xiamiToken == null || "".equals(xiamiToken)) {
+			System.err.println("invalid " + xiamiTokenKey);
 			return false;
 		}
 		HttpGet handshakeGet = new HttpGet();
@@ -255,8 +273,8 @@ public class XMRobot implements Runnable {
 		handshakeGet.addHeader("Accept-Language", acceptLanguageHeader);
 		handshakeGet.addHeader("Connection", connectionHeader);
 		handshakeGet.addHeader("Referer", loopRoomUrl + roomId);
-		handshakeGet.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth);
-		Hacker hacker = new Hacker(this.memberAuth, roomId+"", client,
+		handshakeGet.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		Hacker hacker = new Hacker(this.xiamiToken, roomId + "", client,
 				handshakeGet, this.showLog);
 
 		socket = new SocketIO(hacker);
@@ -264,17 +282,17 @@ public class XMRobot implements Runnable {
 		socket.connect(roomUrl, new IOCallback() {
 			@Override
 			public void onMessage(JSONObject json, IOAcknowledge ack) {
-				MessageHandler(json,ack);
+				MessageHandler(json, ack);
 			}
 
 			@Override
 			public void onMessage(String data, IOAcknowledge ack) {
-				MessageHandler(data,ack);				
+				MessageHandler(data, ack);
 			}
 
 			@Override
 			public void onError(SocketIOException socketIOException) {
-				ErrorHandler(socketIOException);				
+				ErrorHandler(socketIOException);
 			}
 
 			@Override
@@ -289,45 +307,45 @@ public class XMRobot implements Runnable {
 
 			@Override
 			public void on(String event, IOAcknowledge ack, Object... args) {
-				EventHandler(event,ack,args);				
+				EventHandler(event, ack, args);
 			}
 		});
 		return true;
 	}
 
 	public void stopWork() {
-		
+
 	}
-	
+
 	protected void DEBUG(String output) {
 		if (showLog >= 1) {
 			System.out.println("[DEBUG] " + output);
 		}
 	}
-	
+
 	public void startRateTask() {
 		// good-or-bad task
 		Map<String, String> gbParams = new HashMap<String, String>();
 		gbParams.put("v", this.rate + "");
 		gbParams.put("code", this.parsedMemberAuth);
-		rateThread = new XMTaskThread(socket, this.ratePeriod * 1000,
-				"GoodOrBad", gbParams, rateSignal);
-		new Thread(rateThread).start();
+		(new Thread(new LoopTaskThread(socket, this.ratePeriod * 1000,
+				"GoodOrBad", gbParams, rateSignal))).start();
 	}
-	
+
 	public void setChatPeriod(int period) {
 		this.chatPeriod = period;
 		if (this.chatThread != null) {
 			this.chatThread.setPeriod(this.chatPeriod);
 		}
 	}
+
 	public void setRatePeriod(int period) {
 		this.ratePeriod = period;
 		if (this.rateThread != null) {
 			this.rateThread.setPeriod(this.ratePeriod);
 		}
 	}
-	
+
 	public void setChatMessage(String chatMessage) {
 		this.chatMessage = chatMessage;
 		if (this.chatSignal == false) {
@@ -335,7 +353,7 @@ public class XMRobot implements Runnable {
 			this.startChatTask();
 		}
 	}
-	
+
 	public void stopChat() {
 		if (this.chatSignal == true) {
 			this.chatSignal = false;
@@ -344,7 +362,7 @@ public class XMRobot implements Runnable {
 			}
 		}
 	}
-	
+
 	public void stopRate() {
 		if (this.rateSignal == true) {
 			this.rateSignal = false;
@@ -353,7 +371,7 @@ public class XMRobot implements Runnable {
 			}
 		}
 	}
-	
+
 	public void setRate(int rate) {
 		this.rate = rate;
 		if (this.rateSignal == false) {
@@ -361,7 +379,7 @@ public class XMRobot implements Runnable {
 			this.startRateTask();
 		}
 	}
-	
+
 	public boolean startChatTask() {
 		// chat task
 		Map<String, String> chatParams = new HashMap<String, String>();
@@ -370,31 +388,37 @@ public class XMRobot implements Runnable {
 		chatParams.put("code", this.parsedMemberAuth);
 		chatParams.put("room_id", this.room + "");
 		chatParams.put("msg", this.chatMessage);
-		chatThread = new XMTaskThread(socket,
-				this.chatPeriod * 1000, "CommonMsg", chatParams, chatSignal);
-		new Thread(chatThread).start();
+		(new Thread(new LoopTaskThread(socket, this.chatPeriod * 1000,
+				"CommonMsg", chatParams, chatSignal))).start();
 		return true;
 	}
-	
-	public boolean judgeComment(String cid) throws ClientProtocolException, IOException {
-		int fakeId = Integer.parseInt(cid);
-		int realId = Math.abs(fakeId);
-		int rate = fakeId > 0 ? 1 : -1;
-		HttpGet get = new HttpGet("http://loop.xiami.com/commentlist/ageree/?id="+realId+"&state="+rate+"&user_id="+this.uid+"&mode=ajax");
+
+	public List<String> judgeComment(String cid, String rate)
+			throws ClientProtocolException, IOException {
+		List<String> ret = new ArrayList<String>();
+		int realId = Integer.parseInt(cid);
+		rate = Integer.parseInt(rate) > 0 ? "1" : "2";
+		HttpGet get = new HttpGet(
+				"http://loop.xiami.com/commentlist/ageree/?id=" + realId
+						+ "&state=" + rate + "&user_id=" + this.uid
+						+ "&mode=ajax");
 		get.addHeader("Host", xmHostHeader);
 		get.addHeader("User-Agent", userAgentHeader);
-		get.addHeader("Accept", "application/json, text/javascript, */*; q=0.01");
+		get.addHeader("Accept",
+				"application/json, text/javascript, */*; q=0.01");
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
-		get.addHeader("X-Requested-With","XMLHttpRequest");
+		get.addHeader("X-Requested-With", "XMLHttpRequest");
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
 				+ ";t_sign_auth=1;");
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id+" judge comment to "+cid+" fail!");
-			return false;
+			System.out.println(this.id + " judge " + rate + " to "
+					+ cid + " failed");
+			ret.add("fail");
+			return ret;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
 				.getEntity().getContent()));
@@ -405,12 +429,83 @@ public class XMRobot implements Runnable {
 		}
 		String pageString = page.toString();
 		DEBUG(pageString);
-		System.out.println(this.id+" judge comment to "+cid+" success!");
-		return true;
+		System.out.println(this.id + " judge " + rate + " to " + cid
+				+ " success");
+		Matcher m = judgeReturnPattern.matcher(pageString);
+		if (m.find()) {
+			System.out.println("detail:" + m.group(1));
+			ret.add(m.group(1));
+		} else {
+			ret.add("success");
+		}
+		return ret;
 	}
-	
-	public boolean payAttention(String uid) throws ClientProtocolException,
-			IOException {
+
+	public List<String> postCommentToSong(String songId, String comment)
+			throws ClientProtocolException, IOException {
+		List<String> ret = new ArrayList<String>();
+		HttpGet get = new HttpGet(
+				"http://www.xiami.com/commentlist/add?type=4&oid=" + songId
+						+ "&content=" + URLEncoder.encode(comment,"UTF-8")
+						+ "&relids=&mode=ajax&_xiamitoken=" + this.xiamiToken);
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept",
+				"application/json, text/javascript, */*; q=0.01");
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("X-Requested-With", "XMLHttpRequest");
+		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+		get.addHeader("Referer","http://"+xmHostHeader+"/song/"+songId);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
+				+ ";t_sign_auth=1;");
+		HttpResponse response = client.execute(get);
+		int statusCode = response.getStatusLine().getStatusCode();
+		if (statusCode != 200) {
+			System.out.println(this.id + " post " + comment + " to "
+					+ songId + " failed");
+			ret.add("fail");
+			return ret;
+		}
+		BufferedReader br = new BufferedReader(new InputStreamReader(response
+				.getEntity().getContent()));
+		String line = "";
+		StringBuffer page = new StringBuffer();
+		while ((line = br.readLine()) != null) {
+			page.append(line);
+		}
+		String pageString = page.toString();
+		DEBUG(pageString);
+		try {
+			JSONObject returnJson = new JSONObject(pageString);
+			if (returnJson.get("status").equals("failed")) {
+				System.out.println(this.id + " post " + comment + " to " + songId
+					+ " failed");
+				System.out.println("detail:"+returnJson.get("msg"));
+			} else if (returnJson.get("status").equals("ok")) {
+				System.out.println(this.id + " post " + comment + " to " + songId
+						+ " success");
+				Matcher m = commentIdPattern.matcher(returnJson.getString("output"));
+				if (m.find()) {
+					System.out.println("detail:"+m.group(1));
+					ret.add(m.group(1));
+				} else {
+					System.out.println("detail:get comment id failed");					
+				}
+			}
+		} catch (JSONException e) {
+			System.out.println(this.id + " post " + comment + " to " + songId
+					+ " failed");
+			System.out.println("detail:"+pageString);
+			e.printStackTrace();
+		}
+
+		return ret;
+	}
+
+	public List<String> payAttention(String uid)
+			throws ClientProtocolException, IOException {
+		List<String> ret = new ArrayList<String>();
 		HttpGet get = new HttpGet("http://loop.xiami.com/member/attention/uid/"
 				+ uid + "/format/json/type/1/from/loop");
 		get.addHeader("Host", loopHostHeader);
@@ -419,13 +514,14 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Cookie", memberAuthKey + "=" + this.memberAuth
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
 				+ ";t_sign_auth=2;");
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id+" pay attention to "+uid+" fail!");
-			return false;
+			System.out.println(this.id + " pay attention to " + uid + " failed");
+			ret.add("fail");
+			return ret;
 		}
 		BufferedReader br = new BufferedReader(new InputStreamReader(response
 				.getEntity().getContent()));
@@ -436,25 +532,27 @@ public class XMRobot implements Runnable {
 		}
 		String pageString = page.toString();
 		DEBUG(pageString);
-		System.out.println(this.id+" pay attention to "+uid+" success!");
-		return true;
+		System.out.println(this.id + " pay attention to " + uid + " success");
+		ret.add("success");
+		return ret;
 	}
 
 	public boolean updateUidNick() {
 		try {
 			if (this.loginLoop() && this.visitXMWithAuth() && this.uid != null
 					&& this.nick != null) {
-				if (DataHandler.getFileSize(XMDriver.root+XMDriver.profileDir+ this.uid) <= 0) {
+				if (DataHandler.getFileSize(XMDriver.root + XMDriver.profileDir
+						+ this.uid) <= 0) {
 					DEBUG("uid:" + this.uid + " updating");
 					List<String> profile = new ArrayList<String>();
 					profile.add("uid=" + this.uid);
 					profile.add("nick=" + this.nick);
 					profile.add("account=" + this.id);
 					profile.add("password=" + this.pw);
-					DataHandler.writeFile(profile, XMDriver.root+XMDriver.profileDir
-							+ this.uid);
+					DataHandler.writeFile(profile, XMDriver.root
+							+ XMDriver.profileDir + this.uid);
 				} else {
-					DEBUG("uid:" + this.uid + " updated.");
+					DEBUG("uid:" + this.uid + " updated");
 				}
 				return true;
 			}
@@ -478,10 +576,10 @@ public class XMRobot implements Runnable {
 				e.printStackTrace();
 			}
 		} else {
-			System.err.println(this.id+" update nick and uid fail.");
+			System.err.println(this.id + " update nick and uid failed");
 		}
 	}
-	
+
 	public void stopConnect() {
 		if (this.socket != null) {
 			this.socket.disconnect();

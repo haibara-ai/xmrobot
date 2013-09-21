@@ -7,7 +7,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.haibara.autoxm.XMTaskThread;
+import org.haibara.autoxm.LoopTaskThread;
 import org.haibara.io.DataHandler;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -35,7 +35,7 @@ public class XMDJ extends XMAudience{
 	private boolean isDJ = false;
 	private boolean autoPlaySignal = false;
 	
-	private XMTaskThread playThread = null;
+	private LoopTaskThread playThread = null;
 	private XMDJ cascadeDJ = null;	
 	
 	private XMDriver driver = null;
@@ -247,7 +247,7 @@ public class XMDJ extends XMAudience{
 		jsonMap.put("user_id", this.uid);
 		jsonMap.put("room_id", this.room + "");
 		jsonMap.put("code", this.parsedMemberAuth);		
-		playThread = new XMTaskThread(socket,
+		playThread = new LoopTaskThread(socket,
 				this.autoNextPeriod * 1000, "PlayNext", jsonMap, autoPlaySignal);
 		new Thread(playThread).start();
 		return true;
