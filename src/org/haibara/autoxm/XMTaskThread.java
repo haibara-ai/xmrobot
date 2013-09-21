@@ -29,7 +29,7 @@ public class XMTaskThread implements Runnable {
 			int lastSOCounter = 0;
 			String[] methodParams = methodParamsMap.get(m);
 			if (methodParams == null || methodParams.length == 0) {
-
+				// do nothing
 			} else {
 				for (int i = 0; i < methodParams.length; i++) {
 					if ("[stdin]".equals(methodParams[i].toLowerCase())) {
@@ -45,7 +45,7 @@ public class XMTaskThread implements Runnable {
 				for (XMRobot robot : invokerMap.get(m)) {
 					try {
 						if (robot.loginXM()) {
-							lastStdOutput = ((List<String>) m.invoke(robot, methodParams));
+							lastStdOutput = ((List<String>) m.invoke(robot, (Object[])methodParams));
 							if (lastStdOutput.contains("fail")) {
 								System.err.println(robot.id + " " + m.toString()
 										+ "failed");

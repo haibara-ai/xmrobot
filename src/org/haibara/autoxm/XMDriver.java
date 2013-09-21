@@ -1,6 +1,5 @@
 package org.haibara.autoxm;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
@@ -86,7 +85,7 @@ public class XMDriver {
 	public static Map<String, String> loadSetting(String path) {
 		List<String> content = new ArrayList<String>();
 		try {
-			content = (List<String>) DataHandler.readFile(path, "list");
+			content = (List<String>) DataHandler.readFile(path, "list", "UTF-8","");
 		} catch (Exception e) {
 			System.err.println("Load setting.txt error");
 			e.printStackTrace();
@@ -316,7 +315,8 @@ public class XMDriver {
 			Map<Method,String[]> methodParamsMap = new HashMap<Method, String[]>();
 			Pattern quotaPattern = Pattern.compile("\"(.*?)\"");
 			for(String todo : todoList) {
-				String todoConfigStr = settings.get(todo);
+				String todoConfigStr;
+				todoConfigStr = settings.get(todo);
 				Matcher m = quotaPattern.matcher(todoConfigStr);
 				List<String> tmpConf = new ArrayList<String>();
 				while (m.find()) {
@@ -326,6 +326,7 @@ public class XMDriver {
 				String[] todoConfig = todoConfigStr.split(":");
 				int tmpConfCounter = 0;
 				for (int i = 0; i < todoConfig.length; i++) {
+					todoConfig[i] = todoConfig[i].trim();
 					if ("[param]".equals(todoConfig[i])) {
 						todoConfig[i] = tmpConf.get(tmpConfCounter);
 						tmpConfCounter++;
@@ -333,6 +334,7 @@ public class XMDriver {
 				}
 				String robotName = todoConfig[0].trim();
 				String[] methodParams = new String[todoConfig.length-1];
+				@SuppressWarnings("rawtypes")
 				Class[] paramTypes = new Class[methodParams.length];
 				for (int i = 1; i < todoConfig.length; i++){
 					methodParams[i-1] = todoConfig[i].trim();
