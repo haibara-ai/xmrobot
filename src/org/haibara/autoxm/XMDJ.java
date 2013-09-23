@@ -215,7 +215,7 @@ public class XMDJ extends XMAudience{
 		setDJMap.put("user_id", this.uid);
 		setDJMap.put("nick_name", this.nick);
 		setDJMap.put("room_id", this.room + "");
-		setDJMap.put("code", this.parsedMemberAuth);
+		setDJMap.put("code", this.parsedXiamiToken);
 		this.socket.emit("SetDJ", setDJMap);
 		return true;
 	}
@@ -225,7 +225,7 @@ public class XMDJ extends XMAudience{
 		Map<String, String> jsonMap = new HashMap<String, String>();
 		jsonMap.put("user_id", this.uid);
 		jsonMap.put("room_id", this.room + "");
-		jsonMap.put("code", this.parsedMemberAuth);
+		jsonMap.put("code", this.parsedXiamiToken);
 		DEBUG("userCount:" + userCount + " startLoop:" + startLoopVal
 				+ " curLoop:" + loopVal);
 		this.socket.emit("PlayNext", jsonMap);
@@ -246,7 +246,7 @@ public class XMDJ extends XMAudience{
 		Map<String, String> jsonMap = new HashMap<String, String>();
 		jsonMap.put("user_id", this.uid);
 		jsonMap.put("room_id", this.room + "");
-		jsonMap.put("code", this.parsedMemberAuth);		
+		jsonMap.put("code", this.parsedXiamiToken);		
 		playThread = new LoopTaskThread(socket,
 				this.autoNextPeriod * 1000, "PlayNext", jsonMap, autoPlaySignal);
 		new Thread(playThread).start();

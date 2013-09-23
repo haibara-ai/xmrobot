@@ -9,16 +9,17 @@ import io.socket.SocketIOException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-//import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.ClientProtocolException;
@@ -28,7 +29,6 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
-import org.haibara.io.DataHandler;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -38,6 +38,7 @@ public class XMRobot implements Runnable {
 	protected String pw = null;
 
 	protected HttpClient client = null;
+	protected boolean online = false;
 
 	protected SimpleDateFormat time = new SimpleDateFormat(
 			"yyyy-MM-dd HH:mm:ss");
@@ -46,12 +47,13 @@ public class XMRobot implements Runnable {
 	protected final String socketioHost_Alt = "sio.xiami.com:443";
 
 	protected final String loginXMUrl = "http://www.xiami.com/member/login";
+	protected final String logoutXMUrl = "http://www.xiami.com/member/logout";
 	protected final String xmHostHeader = "www.xiami.com";
 
 	protected final String loginLoopUrl = "http://loop.xiami.com/member/login?done=/loop/prverify";
 	protected final String loopHostHeader = "loop.xiami.com";
 
-	protected final String userAgentHeader = "Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20100101 Firefox/15.0.1";
+	protected final String userAgentHeader = "User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:23.0) Gecko/20100101 Firefox/23.0";
 	protected final String acceptCharsetHeader = "UTF-8,*;q=0.5";
 	protected final String acceptEncodingHeader = "deflate";
 	protected final String acceptLanguageHeader = "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3";
@@ -62,8 +64,11 @@ public class XMRobot implements Runnable {
 
 	private static final Pattern judgeReturnPattern = Pattern
 			.compile("<strong>(.*?)</strong>");
-	private static final Pattern commentIdPattern = Pattern.compile("<li id=\"(.*?)\"");
-	// private static final String memberAuthKey = "member_auth";
+	private static final Pattern commentIdPattern = Pattern
+			.compile("<li id=\"(.*?)\"");
+	private static final Pattern replyIdPattern = Pattern
+			.compile("\"brief_(.*?)\"");
+	private static final String memberAuthKey = "member_auth";
 	private static final String xiamiTokenKey = "_xiamitoken";
 
 	protected String chatMessage = "";
@@ -71,20 +76,16 @@ public class XMRobot implements Runnable {
 	protected final String loopRoomUrl = "http://loop.xiami.com/room/";
 
 	protected String defaultProtocol = "http";
+	protected Pattern uidRe = Pattern.compile("/web/feed/id/(.*?)\"");
 
-	protected Pattern uidRe = Pattern
-			.compile(
-					"class=\"uico_home\"\\s+href=\"/u/([0-9]+)\"\\s+title=\".*?\\(.*?\\)\">",
-					Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-	protected Pattern nickRe = Pattern
-			.compile(
-					"class=\"uico_home\"\\s+href=\"/u/[0-9]+\"\\s+title=\".*?\\((.*?)\\)\">",
-					Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+	protected Pattern nickRe = Pattern.compile("<b>(.*?)</b>");
 
 	protected String uid = null;
 	protected String nick = null;
 	protected String xiamiToken = null;
+	protected String parsedXiamiToken = null;
 	protected String parsedMemberAuth = null;
+	protected String rawMemberAuth = null;
 	protected SocketIO socket = null;
 	protected int room = 0;
 	protected boolean atRoom = false;
@@ -127,8 +128,10 @@ public class XMRobot implements Runnable {
 		return this.properties.get(key);
 	}
 
-	@SuppressWarnings("deprecation")
-	public boolean loginXM() throws ClientProtocolException, IOException {
+	public List<String> loginXM() throws ClientProtocolException, IOException {
+		if (this.online) {
+			return setupReturn(this.id);
+		}
 		HttpPost post = new HttpPost(loginXMUrl);
 		List<NameValuePair> data = new ArrayList<NameValuePair>();
 		post.addHeader("Host", xmHostHeader);
@@ -148,19 +151,88 @@ public class XMRobot implements Runnable {
 
 		HttpResponse response = client.execute(post);
 		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
 		if (statusCode != 302) {
-			System.err.println(this.id + " login xiami failed!");
-			return false;
+			System.err.println(this.id + " login xiami failed:" + statusCode);
+			System.err.println(this.id + " detail:" + pageString);
+			return null;
 		}
-		String cookie = response.getFirstHeader("Set-Cookie").toString();
-		String authCookie = cookie.substring(
-				cookie.indexOf(xiamiTokenKey + "=")
-						+ (xiamiTokenKey + "=").length(), cookie.indexOf(";"));
-		response.getEntity().consumeContent();
-		this.xiamiToken = authCookie;
-		this.parsedMemberAuth = this.xiamiToken.replace("%2B", "+").replace(
-				"%2F", "/");
-		return true;
+		String cookie = "";
+		for (Header header : response.getHeaders("Set-Cookie")) {
+			cookie = header.getValue();
+			if (cookie.contains(xiamiTokenKey)) {
+				String authCookie = cookie.substring(
+						cookie.indexOf(xiamiTokenKey + "=")
+								+ (xiamiTokenKey + "=").length(),
+						cookie.indexOf(";"));
+				this.xiamiToken = authCookie;
+				this.parsedXiamiToken = this.xiamiToken.replace("%2B", "+")
+						.replace("%2F", "/");
+			} else if (cookie.contains(memberAuthKey)) {
+				String authCookie = cookie.substring(
+						cookie.indexOf(memberAuthKey + "=")
+								+ (memberAuthKey + "=").length(),
+						cookie.indexOf(";"));
+				this.rawMemberAuth = authCookie;
+				this.parsedMemberAuth = this.rawMemberAuth.replace("%2B", "+")
+						.replace("%2F", "/");
+			}
+		}
+		this.online = true;
+		return setupReturn(this.id);
+	}
+	
+	private List<String> setupReturn(String... args) {
+		if (args == null || args.length == 0) {
+			return null;
+		} 
+		List<String> ret = new ArrayList<String>();
+		for (String arg : args) {
+			ret.add(arg);
+		}
+		return ret;
+	}
+	
+	public List<String> logoutXM() throws ClientProtocolException, IOException {
+		if (!this.online) {
+			return setupReturn(this.id);
+		}			
+		HttpPost get = new HttpPost(logoutXMUrl);
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept", acceptHeader);
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("Accept-Charset", acceptCharsetHeader);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+
+		HttpResponse response = client.execute(get);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+		if (statusCode != 302) {
+			System.err.println(this.id + " logout xiami failed:" + statusCode);
+			System.out.println("detail:"+pageString);
+			return null;
+		}
+		this.online = false;
+		this.xiamiToken = "";
+		return setupReturn(this.id);
+	}
+
+	private String getResponseContent(HttpResponse response) {
+		StringBuffer page = new StringBuffer();
+		try {
+			BufferedReader br = new BufferedReader(new InputStreamReader(
+					response.getEntity().getContent(), "UTF-8"));
+			String line = "";
+			while ((line = br.readLine()) != null) {
+				page.append(line);
+			}
+			br.close();
+		} catch (IllegalStateException | IOException e) {
+			e.printStackTrace();
+		}
+		return page.toString();
 	}
 
 	@SuppressWarnings("deprecation")
@@ -191,38 +263,40 @@ public class XMRobot implements Runnable {
 				cookie.indexOf(xiamiTokenKey + "=")
 						+ (xiamiTokenKey + "=").length(), cookie.indexOf(";"));
 		this.xiamiToken = authCookie;
-		this.parsedMemberAuth = this.xiamiToken.replace("%2B", "+").replace(
+		this.parsedXiamiToken = this.xiamiToken.replace("%2B", "+").replace(
 				"%2F", "/");
 		response.getEntity().consumeContent();
 		return true;
 	}
 
-	public boolean visitXMWithAuth() throws ClientProtocolException,
+	public List<String> setupUidNick() throws ClientProtocolException,
 			IOException {
-		HttpGet get = new HttpGet("http://www.xiami.com/");
+		if (null != this.uid && null != this.nick) {
+			return setupReturn(this.uid,this.nick);
+		}
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" setup uid failed: login xm failed");
+				return null;
+			}
+		}
+		HttpGet get = new HttpGet("http://www.xiami.com/web/profile");
 		get.addHeader("Host", xmHostHeader);
 		get.addHeader("User-Agent", userAgentHeader);
 		get.addHeader("Accept", acceptHeader);
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Referer", "http://www.xiami.com/");
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
-				+ ";t_sign_auth=2;");
+		get.addHeader("Referer", "http://www.xiami.com/web");
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		HttpResponse response = client.execute(get);
+		String pageString = getResponseContent(response);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.err.println(this.id + " visit xm failed!");
-			return false;
+			System.err.println(this.id + " setup uid failed : " + statusCode);
+			System.out.println("detail:" + pageString);
+			return null;
 		}
-		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent(), "UTF-8"));
-		String line = "";
-		StringBuffer page = new StringBuffer();
-		while ((line = br.readLine()) != null) {
-			page.append(line);
-		}
-		String pageString = page.toString();
 		Matcher uidM = uidRe.matcher(pageString);
 		if (uidM.find()) {
 			this.uid = uidM.group(1);
@@ -230,8 +304,8 @@ public class XMRobot implements Runnable {
 		Matcher nickM = nickRe.matcher(pageString);
 		if (nickM.find()) {
 			this.nick = nickM.group(1);
-		}
-		return true;
+		}		
+		return this.setupReturn(this.uid,this.nick);
 	}
 
 	public void MessageHandler(JSONObject json, IOAcknowledge ack) {
@@ -327,7 +401,7 @@ public class XMRobot implements Runnable {
 		// good-or-bad task
 		Map<String, String> gbParams = new HashMap<String, String>();
 		gbParams.put("v", this.rate + "");
-		gbParams.put("code", this.parsedMemberAuth);
+		gbParams.put("code", this.parsedXiamiToken);
 		(new Thread(new LoopTaskThread(socket, this.ratePeriod * 1000,
 				"GoodOrBad", gbParams, rateSignal))).start();
 	}
@@ -385,7 +459,7 @@ public class XMRobot implements Runnable {
 		Map<String, String> chatParams = new HashMap<String, String>();
 		chatParams.put("user_id", this.uid);
 		chatParams.put("nick_name", this.nick);
-		chatParams.put("code", this.parsedMemberAuth);
+		chatParams.put("code", this.parsedXiamiToken);
 		chatParams.put("room_id", this.room + "");
 		chatParams.put("msg", this.chatMessage);
 		(new Thread(new LoopTaskThread(socket, this.chatPeriod * 1000,
@@ -393,13 +467,124 @@ public class XMRobot implements Runnable {
 		return true;
 	}
 
+	public List<String> dailySignin() throws ClientProtocolException,
+			IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" daily signin failed: login xm failed");
+				return null;
+			}
+		}
+		if (null == this.uid) {
+			if (null == this.setupUidNick()) {
+				System.err.println(this.id+" daily signin failed: setup uid failed");
+				return null;
+			}
+		}
+		HttpPost get = new HttpPost("http://www.xiami.com/web/checkin/id/"
+				+ this.uid);
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept",
+				"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("Referer", "http://www.xiami.com/web");
+		get.addHeader("Accept-Charset", acceptCharsetHeader);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+
+		HttpResponse response = client.execute(get);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+
+		if (statusCode != 302) {
+			System.err.println(this.id + " signin daily failed:" + statusCode);
+			System.out.println("detail:" + pageString);
+			return setupReturn("fail");
+		}
+		return setupReturn("success");
+	}
+
+	public List<String> replyComment(String cidStr, String comment)
+			throws ClientProtocolException, IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" reply comment failed: login xm failed");
+				return null;
+			}
+		}
+		String[] cids = cidStr.split(":");
+		String cid = cids[0];
+		String type = cids[1];
+		HttpPost post = new HttpPost("http://www.xiami.com/commentlist/re/id/"
+				+ cid + "/type/4");
+		List<NameValuePair> data = new ArrayList<NameValuePair>();
+		post.addHeader("Host", xmHostHeader);
+		post.addHeader("User-Agent", userAgentHeader);
+		post.addHeader("Accept", "*/*");
+		post.addHeader("Accept-Language", acceptLanguageHeader);
+		post.addHeader("Connection", connectionHeader);
+		post.addHeader("Content-Type",
+				"application/x-www-form-urlencoded; charset=UTF-8");
+		post.addHeader("X-Requested-With", "XMLHttpRequest");
+		post.addHeader("Accept-Charset", acceptCharsetHeader);
+		post.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+
+		data.add(new BasicNameValuePair("content", comment));
+		data.add(new BasicNameValuePair("relids", ""));
+		data.add(new BasicNameValuePair("type", "4"));
+		data.add(new BasicNameValuePair(xiamiTokenKey, xiamiToken));
+		if (type.equals("reply")) {
+			data.add(new BasicNameValuePair("act", "quote"));			
+		}
+		try {
+			post.setEntity(new UrlEncodedFormEntity(data, "UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+
+		HttpResponse response = client.execute(post);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+		if (statusCode != 200) {
+			System.err.println(this.id + " reply " + comment + " to " + cid
+					+ " failed:" + statusCode);
+			System.err.println("detail:" + pageString);
+			return setupReturn("fail");
+		}
+
+		System.err.println(this.id + " reply " + comment + " to " + cid
+				+ " success");
+		Matcher m = replyIdPattern.matcher(pageString);
+		if (m.find()) {
+			System.out.println("detail:" + m.group(1));
+			return setupReturn(m.group(1)+":"+"reply");
+		} else {
+			System.out.println("detail:get reply id error:" + pageString);
+			return setupReturn("fail");
+		}
+	}
+
 	public List<String> judgeComment(String cid, String rate)
 			throws ClientProtocolException, IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" judge comment failed: login xm failed");
+				return null;
+			}
+		}
+		if (null == this.uid) {
+			if (null == this.setupUidNick()) {
+				System.err.println(this.id+" judge comment failed: setup uid failed");
+				return null;
+			}
+		}
 		List<String> ret = new ArrayList<String>();
 		int realId = Integer.parseInt(cid);
 		rate = Integer.parseInt(rate) > 0 ? "1" : "2";
 		HttpGet get = new HttpGet(
-				"http://loop.xiami.com/commentlist/ageree/?id=" + realId
+				"http://www.xiami.com/commentlist/ageree/?id=" + realId
 						+ "&state=" + rate + "&user_id=" + this.uid
 						+ "&mode=ajax");
 		get.addHeader("Host", xmHostHeader);
@@ -410,24 +595,16 @@ public class XMRobot implements Runnable {
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("X-Requested-With", "XMLHttpRequest");
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
-				+ ";t_sign_auth=1;");
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id + " judge " + rate + " to "
-					+ cid + " failed");
+			System.out.println(this.id + " judge " + rate + " to " + cid
+					+ " failed");
 			ret.add("fail");
 			return ret;
 		}
-		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent()));
-		String line = "";
-		StringBuffer page = new StringBuffer();
-		while ((line = br.readLine()) != null) {
-			page.append(line);
-		}
-		String pageString = page.toString();
+		String pageString = getResponseContent(response);
 		DEBUG(pageString);
 		System.out.println(this.id + " judge " + rate + " to " + cid
 				+ " success");
@@ -443,10 +620,15 @@ public class XMRobot implements Runnable {
 
 	public List<String> postCommentToSong(String songId, String comment)
 			throws ClientProtocolException, IOException {
-		List<String> ret = new ArrayList<String>();
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" post comment to song failed: login xm failed");
+				return null;
+			}
+		}
 		HttpGet get = new HttpGet(
 				"http://www.xiami.com/commentlist/add?type=4&oid=" + songId
-						+ "&content=" + URLEncoder.encode(comment,"UTF-8")
+						+ "&content=" + URLEncoder.encode(comment, "UTF-8")
 						+ "&relids=&mode=ajax&_xiamitoken=" + this.xiamiToken);
 		get.addHeader("Host", xmHostHeader);
 		get.addHeader("User-Agent", userAgentHeader);
@@ -456,127 +638,134 @@ public class XMRobot implements Runnable {
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("X-Requested-With", "XMLHttpRequest");
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Referer","http://"+xmHostHeader+"/song/"+songId);
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
-				+ ";t_sign_auth=1;");
+		get.addHeader("Referer", "http://" + xmHostHeader + "/song/" + songId);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		HttpResponse response = client.execute(get);
+		String pageString = getResponseContent(response);
+		DEBUG(pageString);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id + " post " + comment + " to "
-					+ songId + " failed");
-			ret.add("fail");
-			return ret;
+			System.out.println(this.id + " post " + comment + " to " + songId
+					+ " failed : " + statusCode);			
+			return setupReturn("fail");
 		}
-		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent()));
-		String line = "";
-		StringBuffer page = new StringBuffer();
-		while ((line = br.readLine()) != null) {
-			page.append(line);
-		}
-		String pageString = page.toString();
-		DEBUG(pageString);
 		try {
 			JSONObject returnJson = new JSONObject(pageString);
 			if (returnJson.get("status").equals("failed")) {
-				System.out.println(this.id + " post " + comment + " to " + songId
-					+ " failed");
-				System.out.println("detail:"+returnJson.get("msg"));
+				System.err.println(this.id + " post " + comment + " to "
+						+ songId + " failed");
+				System.err.println("detail:" + returnJson.get("msg"));
+				return setupReturn("fail");
 			} else if (returnJson.get("status").equals("ok")) {
-				System.out.println(this.id + " post " + comment + " to " + songId
-						+ " success");
-				Matcher m = commentIdPattern.matcher(returnJson.getString("output"));
+				System.out.println(this.id + " post " + comment + " to "
+						+ songId + " success");
+				Matcher m = commentIdPattern.matcher(returnJson
+						.getString("output"));
 				if (m.find()) {
-					System.out.println("detail:"+m.group(1));
-					ret.add(m.group(1));
+					System.out.println("detail:" + m.group(1));
+					return setupReturn(m.group(1)+":"+"post");
 				} else {
-					System.out.println("detail:get comment id failed");					
+					System.err.println("detail:get comment id failed");
+					return setupReturn("fail");
 				}
 			}
 		} catch (JSONException e) {
-			System.out.println(this.id + " post " + comment + " to " + songId
+			System.err.println(this.id + " post " + comment + " to " + songId
 					+ " failed");
-			System.out.println("detail:"+pageString);
+			System.err.println("detail:" + pageString);
 			e.printStackTrace();
 		}
-
-		return ret;
+		return null;
 	}
-
-	public List<String> payAttention(String uid)
-			throws ClientProtocolException, IOException {
-		List<String> ret = new ArrayList<String>();
-		HttpGet get = new HttpGet("http://loop.xiami.com/member/attention/uid/"
-				+ uid + "/format/json/type/1/from/loop");
-		get.addHeader("Host", loopHostHeader);
+	
+	public List<String> unfollow(String uid) throws ClientProtocolException,
+			IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" unfollow failed: login xm failed");
+				return null;
+			}
+		}
+		HttpGet get = new HttpGet("http://www.xiami.com/member/attention/uid/"
+				+ uid + "/type/2?" + xiamiTokenKey + "=" + xiamiToken);
+		get.addHeader("Host", xmHostHeader);
 		get.addHeader("User-Agent", userAgentHeader);
-		get.addHeader("Accept", acceptHeader);
+		get.addHeader("Accept",
+				"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken
-				+ ";t_sign_auth=2;");
+		get.addHeader("Referer", "http://www.xiami.com/u/" + uid);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		HttpResponse response = client.execute(get);
+		String pageString = getResponseContent(response);
+		DEBUG(pageString);
+		int statusCode = response.getStatusLine().getStatusCode();
+		if (statusCode != 200) {
+			System.err.println(this.id + " unfollow " + uid + " failed : "
+					+ statusCode);
+			return setupReturn("fail");
+		}
+		System.out.println(this.id + " unfollow " + uid + " success");
+		return setupReturn("success");
+	}
+
+	public List<String> follow(String uid) throws ClientProtocolException,
+			IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" follow failed: login xm failed");
+				return null;
+			}
+		}
+		HttpGet get = new HttpGet(
+				"http://www.xiami.com/member/attention/from/ajax/type/1/uid/"
+						+ uid + "?" + xiamiTokenKey + "=" + xiamiToken);
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept", "text/html, */*; q=0.01");
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("X-Requested-With", "XMLHttpRequest");
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+		get.addHeader("Referer", "http://www.xiami.com/u/" + uid);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id + " pay attention to " + uid + " failed");
-			ret.add("fail");
-			return ret;
+			System.out.println(this.id + " follow " + uid + " failed : "
+					+ statusCode);
+			return setupReturn("fail");
 		}
-		BufferedReader br = new BufferedReader(new InputStreamReader(response
-				.getEntity().getContent()));
-		String line = "";
-		StringBuffer page = new StringBuffer();
-		while ((line = br.readLine()) != null) {
-			page.append(line);
-		}
-		String pageString = page.toString();
+		String pageString = getResponseContent(response);
 		DEBUG(pageString);
-		System.out.println(this.id + " pay attention to " + uid + " success");
-		ret.add("success");
-		return ret;
-	}
-
-	public boolean updateUidNick() {
-		try {
-			if (this.loginLoop() && this.visitXMWithAuth() && this.uid != null
-					&& this.nick != null) {
-				if (DataHandler.getFileSize(XMDriver.root + XMDriver.profileDir
-						+ this.uid) <= 0) {
-					DEBUG("uid:" + this.uid + " updating");
-					List<String> profile = new ArrayList<String>();
-					profile.add("uid=" + this.uid);
-					profile.add("nick=" + this.nick);
-					profile.add("account=" + this.id);
-					profile.add("password=" + this.pw);
-					DataHandler.writeFile(profile, XMDriver.root
-							+ XMDriver.profileDir + this.uid);
-				} else {
-					DEBUG("uid:" + this.uid + " updated");
-				}
-				return true;
-			}
-		} catch (ClientProtocolException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (pageString.indexOf("你已关注") != -1) {
+			System.out.println(this.id + " follow " + uid + " success");
+			return setupReturn(this.id);
+		} else {
+			System.out.println(this.id + " follow " + uid + " failed");
+			System.out.println("detail:" + pageString);
+			return setupReturn("fail");
 		}
-		return false;
 	}
 
 	@Override
 	public void run() {
-		if (this.updateUidNick()) {
-			DEBUG("uid:" + uid + ", nick:" + nick);
-			try {
-				this.enterLoopRoom(this.room);
-			} catch (IOException e) {
-				e.printStackTrace();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+		try {
+			if (null != this.setupUidNick()) {
+				DEBUG("uid:" + uid + ", nick:" + nick);
+				try {
+					this.enterLoopRoom(this.room);
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			} else {
+				System.err.println(this.id + " update nick and uid failed");
 			}
-		} else {
-			System.err.println(this.id + " update nick and uid failed");
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 

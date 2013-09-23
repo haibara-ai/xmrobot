@@ -24,15 +24,21 @@ public class XMDriver {
 	protected final static String profileDir = configDir + "/profile/";
 	protected final static String userFilePath = configDir + "/user.txt";
 	protected final static String settingFilePath = configDir + "/setting.txt";
-	private static Map<String,String> methodMap = new HashMap<>();
+	private static Map<String, String> methodMap = new HashMap<>();
 	static {
-		methodMap.put("pay_attention", "payAttention");
+		methodMap.put("follow", "follow");
+		methodMap.put("unfollow", "unfollow");
 		methodMap.put("judge_comment", "judgeComment");
-		methodMap.put("post_comment_to_song", "postCommentToSong");		
+		methodMap.put("reply_comment", "replyComment");
+		methodMap.put("post_comment_to_song", "postCommentToSong");
+		methodMap.put("daily_signin", "dailySignin");
+		methodMap.put("login", "loginXM");
+		methodMap.put("logout", "logoutXM");
+		methodMap.put("setup_uid_nick", "setupUidNick");
 	}
+
 	/*
 	 * 读取 config/user.txt，获取user数据
-	 * 
 	 */
 	@SuppressWarnings("unchecked")
 	private static Map<String, List<Map<String, String>>> loadUser(String path) {
@@ -85,14 +91,15 @@ public class XMDriver {
 	public static Map<String, String> loadSetting(String path) {
 		List<String> content = new ArrayList<String>();
 		try {
-			content = (List<String>) DataHandler.readFile(path, "list", "UTF-8","");
+			content = (List<String>) DataHandler.readFile(path, "list",
+					"UTF-8", "");
 		} catch (Exception e) {
 			System.err.println("Load setting.txt error");
 			e.printStackTrace();
 		}
 		Map<String, String> ret = new HashMap<String, String>();
 		for (String line : content) {
-			String piece = line.trim();			
+			String piece = line.trim();
 			if (piece.isEmpty() || piece.startsWith("#")) {
 				continue;
 			}
@@ -115,7 +122,8 @@ public class XMDriver {
 						+ profileDir + file, "list");
 				for (String line : profile) {
 					if (line.startsWith("account=")) {
-						ret.put(line.substring(line.indexOf("=") + 1).trim(), file.trim());
+						ret.put(line.substring(line.indexOf("=") + 1).trim(),
+								file.trim());
 					}
 				}
 			} catch (Exception e) {
@@ -232,12 +240,14 @@ public class XMDriver {
 	private Map<String, String> djProperties = new HashMap<String, String>();
 	private Map<String, String> audienceProperties = new HashMap<String, String>();
 
-	public void start() throws InterruptedException, NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+	public void start() throws InterruptedException, NoSuchMethodException,
+			SecurityException, IllegalAccessException,
+			IllegalArgumentException, InvocationTargetException {
 		Map<String, List<Map<String, String>>> users = XMDriver.loadUser(root
 				+ userFilePath);
-		Map<String,String> namePwMap = new HashMap<String, String>();
-		for (List<Map<String,String>> tmpUsers : users.values()) {
-			for (Map<String,String> user : tmpUsers) {
+		Map<String, String> namePwMap = new HashMap<String, String>();
+		for (List<Map<String, String>> tmpUsers : users.values()) {
+			for (Map<String, String> user : tmpUsers) {
 				namePwMap.put(user.get("user"), user.get("password"));
 			}
 		}
@@ -286,15 +296,22 @@ public class XMDriver {
 			System.err.println("Invalid mode:" + mode);
 		}
 		// process mode 0 situation
-		if (mode == 0) {		
-			int actionUserCount = Integer.parseInt(settings.get("action_user_count"));
+		if (mode == 0) {
+			int actionUserCount = Integer.parseInt(settings
+					.get("action_user_count"));
 			System.out.println("action user count:" + actionUserCount);
 			String[] todoList = settings.get("action").split("\\|");
+			List<List<String>> todoMethodStrList = new ArrayList<List<String>>();
 			for (int i = 0; i < todoList.length; i++) {
 				todoList[i] = todoList[i].trim();
+				List<String> tmpStageMethodStrList = new ArrayList<String>();
+				for (String m : todoList[i].split(",")) {
+					tmpStageMethodStrList.add(m.trim());
+				}
+				todoMethodStrList.add(tmpStageMethodStrList);
 			}
-			int counter = 0;			
-			List<Map<String,String>> userList = new ArrayList<Map<String,String>>();
+			int counter = 0;
+			List<Map<String, String>> userList = new ArrayList<Map<String, String>>();
 			for (Map<String, String> user : users.get("dj")) {
 				counter++;
 				if (counter > actionUserCount) {
@@ -308,59 +325,69 @@ public class XMDriver {
 				if (counter > actionUserCount) {
 					break;
 				}
-				userList.add(user);				
+				userList.add(user);
 			}
-			List<Method> todoMethodList = new ArrayList<Method>();
-			Map<Method,List<XMRobot>> methodInvokerMap = new HashMap<Method, List<XMRobot>>();
-			Map<Method,String[]> methodParamsMap = new HashMap<Method, String[]>();
+			List<List<String>> todoMethodList = new ArrayList<List<String>>();
+			Map<String, List<String>> methodInvokerMap = new HashMap<String, List<String>>();
+			Map<String, List<String[]>> methodParamsMap = new HashMap<String, List<String[]>>();
 			Pattern quotaPattern = Pattern.compile("\"(.*?)\"");
-			for(String todo : todoList) {
-				String todoConfigStr;
-				todoConfigStr = settings.get(todo);
-				Matcher m = quotaPattern.matcher(todoConfigStr);
-				List<String> tmpConf = new ArrayList<String>();
-				while (m.find()) {
-					tmpConf.add(m.group(1));
-					todoConfigStr = todoConfigStr.replace(m.group(0), "[param]");
-				}
-				String[] todoConfig = todoConfigStr.split(":");
-				int tmpConfCounter = 0;
-				for (int i = 0; i < todoConfig.length; i++) {
-					todoConfig[i] = todoConfig[i].trim();
-					if ("[param]".equals(todoConfig[i])) {
-						todoConfig[i] = tmpConf.get(tmpConfCounter);
-						tmpConfCounter++;
+			Map<String,Method> methodStrMap = new HashMap<String, Method>();
+			for (List<String> stageTodo : todoMethodStrList) {
+				List<String> tmpMethodList = new ArrayList<String>();
+				for (String todo : stageTodo) {
+					String todoConfigStr;
+					todoConfigStr = settings.get(todo);
+					Matcher m = quotaPattern.matcher(todoConfigStr);
+					List<String> tmpConf = new ArrayList<String>();
+					while (m.find()) {
+						tmpConf.add(m.group(1));
+						todoConfigStr = todoConfigStr.replace(m.group(0),
+								"[param]");
 					}
-				}
-				String robotName = todoConfig[0].trim();
-				String[] methodParams = new String[todoConfig.length-1];
-				@SuppressWarnings("rawtypes")
-				Class[] paramTypes = new Class[methodParams.length];
-				for (int i = 1; i < todoConfig.length; i++){
-					methodParams[i-1] = todoConfig[i].trim();
-					paramTypes[i-1] = String.class;
-				}
-				Method todoMethod = XMRobot.class.getMethod(methodMap.get(todo),paramTypes);				
-				List<XMRobot> robotList = new ArrayList<XMRobot>();
-				if (!"[user]".equals(robotName)){
-					robotList.add(new XMRobot(robotName, namePwMap.get(robotName), null));
-				} else {
-					for (Map<String,String> user : userList) {
-						robotList.add(new XMRobot(user.get("user"), user.get("password"), null));
+					String[] todoConfig = todoConfigStr.split(":");
+
+					String robotNameStr = todoConfig[0].trim();
+					String[] methodParams = new String[todoConfig.length - 1];
+					@SuppressWarnings("rawtypes")
+					Class[] paramTypes = new Class[methodParams.length];
+					for (int i = 1; i < todoConfig.length; i++) {
+						methodParams[i - 1] = todoConfig[i].trim();
+						paramTypes[i - 1] = String.class;
 					}
+					if (!methodStrMap.containsKey(todo)) {
+						methodStrMap.put(todo, XMRobot.class.getMethod(
+							getFormalMethod(todo), paramTypes));
+					}
+					List<String> robotList = new ArrayList<String>();
+					if (!"[user]".equals(robotNameStr)) {
+						String[] robotNames = robotNameStr.split(",");
+						for (String robotName : robotNames) {
+							robotName = robotName.trim();
+							robotList.add(robotName);
+						}
+					} else {
+						for (Map<String, String> user : userList) {
+							robotList.add(user.get("user"));
+						}
+					}
+					tmpMethodList.add(todo);
+					methodInvokerMap.put(todo, robotList);
+					List<String[]> methodParamsList = new ArrayList<String[]>();
+					collectMethodParams(0, methodParams, methodParamsList, 0,
+							tmpConf);
+					methodParamsMap.put(todo, methodParamsList);
 				}
-				todoMethodList.add(todoMethod);
-				methodInvokerMap.put(todoMethod, robotList);
-				methodParamsMap.put(todoMethod, methodParams);
+				todoMethodList.add(tmpMethodList);
 			}
-			(new Thread(new XMTaskThread(todoMethodList,methodInvokerMap,methodParamsMap))).start();
+			(new Thread(new XMTaskThread(methodStrMap,todoMethodList, methodInvokerMap,
+					methodParamsMap, namePwMap))).start();
 			return;
 		}
-		
+
 		System.out.println("dj count:" + djCount);
 		System.out.println("audience count:" + audienceCount);
-		// start dj		
-		Set<String> djSet = new HashSet<String>();		
+		// start dj
+		Set<String> djSet = new HashSet<String>();
 		for (Map<String, String> user : users.get("dj")) {
 			if (djSet.size() >= djCount) {
 				break;
@@ -410,6 +437,42 @@ public class XMDriver {
 			taskComplete = true;
 			this.notifyExit();
 			return;
+		}
+	}
+	
+	private String getFormalMethod(String methodStr) {
+		for (String mkey : methodMap.keySet()) {
+			if (methodStr.indexOf(mkey) == 0) {
+				return methodMap.get(mkey);
+			}
+		}
+		return null;
+	}
+	
+	private void collectMethodParams(int paramIndex, String[] methodParams,
+			List<String[]> collector, int tmpConfCounter, List<String> tmpConf) {
+		if (null == methodParams || methodParams.length == 0) {
+			collector.add(methodParams);
+			return;
+		}
+		String paramStr = methodParams[paramIndex];
+		List<String> curIndexParams = new ArrayList<String>();
+		for (String param : paramStr.split(",")) {
+			if ("[param]".equals(param)) {
+				param = tmpConf.get(tmpConfCounter);
+				tmpConfCounter++;
+			}
+			curIndexParams.add(param);
+		}
+		for (String param : curIndexParams) {
+			String[] methodParamsClone = methodParams.clone();
+			methodParamsClone[paramIndex] = param;
+			if (paramIndex < methodParams.length - 1) {
+				collectMethodParams(paramIndex + 1, methodParamsClone,
+						collector, tmpConfCounter, tmpConf);
+			} else {
+				collector.add(methodParamsClone);
+			}
 		}
 	}
 
