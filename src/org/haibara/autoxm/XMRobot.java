@@ -53,7 +53,7 @@ public class XMRobot implements Runnable {
 	protected final String loginLoopUrl = "http://loop.xiami.com/member/login?done=/loop/prverify";
 	protected final String loopHostHeader = "loop.xiami.com";
 
-	protected final String userAgentHeader = "User-Agent: Mozilla/5.0 (Windows NT 6.1; rv:23.0) Gecko/20100101 Firefox/23.0";
+	protected final String userAgentHeader = "Mozilla/5.0 (Windows NT 6.1; rv:2.0) Gecko/20100101 Firefox/4.0 QQDownload/1.7";
 	protected final String acceptCharsetHeader = "UTF-8,*;q=0.5";
 	protected final String acceptEncodingHeader = "deflate";
 	protected final String acceptLanguageHeader = "zh-cn,zh;q=0.8,en-us;q=0.5,en;q=0.3";
@@ -120,14 +120,102 @@ public class XMRobot implements Runnable {
 			// do nothing
 		}
 	}
-
+	
 	protected String GetProperty(String key) {
 		if (this.properties == null || !this.properties.containsKey(key)) {
 			return "";
 		}
 		return this.properties.get(key);
 	}
+	
+	public String visitPage(String url) throws ClientProtocolException, IOException {
+		url = url.trim().replace("http[s]://", "");
+		HttpPost get = new HttpPost("http://"+url);
+		get.addHeader("Host", url.substring(0,url.indexOf("/")));
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept", acceptHeader);
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("Accept-Charset", acceptCharsetHeader);
+		if (this.xiamiToken != null) {
+			get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		}
+		HttpResponse response = client.execute(get);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+		if (statusCode != 200) {
+			System.err.println(this.id + " visit "+url+" failed:" + statusCode);
+			System.out.println("detail:"+pageString);
+			return null;
+		}
+		System.err.println(this.id + " visit "+url+" success");
+		return pageString;
+		
+	}
+	
+	private Pattern tokenInputPattern = Pattern.compile("name=\"token\"\\s+value=\"(.*?)\"");
+	private Pattern xiamiTokenInputPattern = Pattern.compile("name=\"_xiamitoken\"\\s+value=\"(.*?)\"");
+	public List<String> registXM(String email,String nick,String password,String checkcode) throws ClientProtocolException, IOException {				
+		String pageContent = this.visitPage("www.xiami.com/member/register");
+		if (pageContent == null) {
+			System.err.println("regist XM error: email="+email);
+			System.err.println("detail:"+"get regist page error");
+			return null;
+		}
+		Matcher m = tokenInputPattern.matcher(pageContent);
+		String token = "";
+		if (m.find()) {
+			token = m.group(1);
+		} else {
+			System.err.println("regist XM error: email="+email);
+			System.err.println("detail:"+"get token error");
+			return null;
+		}
+		m = xiamiTokenInputPattern.matcher(pageContent);
+		String xiamiTokenInput = "";
+		if (m.find()) {
+			xiamiTokenInput = m.group(1);
+		}
+		
+		HttpPost post = new HttpPost("http://www.xiami.com/member/register");
+		List<NameValuePair> data = new ArrayList<NameValuePair>();
+		post.addHeader("Host", xmHostHeader);
+		post.addHeader("User-Agent", userAgentHeader);
+		post.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+		post.addHeader("Accept-Language", acceptLanguageHeader);
+		post.addHeader("Connection", connectionHeader);
+		post.addHeader("Referer", "http://www.xiami.com/member/register");		
+		post.addHeader("Content-Type", "application/x-www-form-urlencoded");
+		post.addHeader("Accept-Charset", acceptCharsetHeader);
 
+		data.add(new BasicNameValuePair("email", email));
+		data.add(new BasicNameValuePair("nickname", nick));
+		data.add(new BasicNameValuePair("password", password));
+		data.add(new BasicNameValuePair("validate", checkcode));
+		data.add(new BasicNameValuePair("invite_code", ""));
+		data.add(new BasicNameValuePair("agreement", "on"));
+		data.add(new BasicNameValuePair("submit", "11"));
+		data.add(new BasicNameValuePair("target", ""));
+		data.add(new BasicNameValuePair("token", token));
+		if (xiamiTokenInput.length() > 0) {
+			data.add(new BasicNameValuePair("_xiamitoken", xiamiTokenInput));				
+		}
+		
+		post.setEntity(new UrlEncodedFormEntity(data,"UTF-8"));
+		
+		HttpResponse response = client.execute(post);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+		System.out.println(pageString);
+		if (statusCode != 302) {
+			System.err.println(email + " regist xiami failed:" + statusCode);
+			System.err.println(email + " detail:" + pageString);
+			return null;
+		}
+		System.out.println(email + " regist xiami success");
+		return setupReturn(email);
+	}
+	
 	public List<String> loginXM() throws ClientProtocolException, IOException {
 		if (this.online) {
 			return setupReturn(this.id);
@@ -466,7 +554,7 @@ public class XMRobot implements Runnable {
 				"CommonMsg", chatParams, chatSignal))).start();
 		return true;
 	}
-
+	private Pattern checkinUrlPattern = Pattern.compile("class=\"check_in\"\\s+href=\"(.*?)\"");
 	public List<String> dailySignin() throws ClientProtocolException,
 			IOException {
 		if (!this.online) {
@@ -481,28 +569,34 @@ public class XMRobot implements Runnable {
 				return null;
 			}
 		}
-		HttpPost get = new HttpPost("http://www.xiami.com/web/checkin/id/"
-				+ this.uid);
+		String pageContent = this.visitPage("www.xiami.com/web");
+		Matcher m = checkinUrlPattern.matcher(pageContent);
+		String checkinUrl = "";
+		if (m.find()) {
+			checkinUrl = m.group(1);
+		} else {
+			throw new RuntimeException("daily signin failed:"+pageContent);
+		}
+		HttpPost get = new HttpPost("http://www.xiami.com"+checkinUrl);
 		get.addHeader("Host", xmHostHeader);
 		get.addHeader("User-Agent", userAgentHeader);
-		get.addHeader("Accept",
-				"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+		get.addHeader("Accept","text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
 		get.addHeader("Accept-Language", acceptLanguageHeader);
-		get.addHeader("Connection", connectionHeader);
 		get.addHeader("Referer", "http://www.xiami.com/web");
-		get.addHeader("Accept-Charset", acceptCharsetHeader);
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+//		get.addHeader("Accept-Charset", acceptCharsetHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		get.addHeader("Connection", connectionHeader);
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		String pageString = getResponseContent(response);
-
 		if (statusCode != 302) {
 			System.err.println(this.id + " signin daily failed:" + statusCode);
-			System.out.println("detail:" + pageString);
+			System.err.println("detail:" + pageString);
 			return setupReturn("fail");
 		}
+		System.out.println(this.id + " signin daily success");		
+		System.out.println("detail:" + pageString);
 		return setupReturn("success");
 	}
 
@@ -566,7 +660,7 @@ public class XMRobot implements Runnable {
 		}
 	}
 
-	public List<String> judgeComment(String cid, String rate)
+	public List<String> judgeComment(String cidStr, String rate)
 			throws ClientProtocolException, IOException {
 		if (!this.online) {
 			if (null == this.loginXM()) {
@@ -581,7 +675,7 @@ public class XMRobot implements Runnable {
 			}
 		}
 		List<String> ret = new ArrayList<String>();
-		int realId = Integer.parseInt(cid);
+		int realId = Integer.parseInt(cidStr.substring(0,cidStr.indexOf(":")));
 		rate = Integer.parseInt(rate) > 0 ? "1" : "2";
 		HttpGet get = new HttpGet(
 				"http://www.xiami.com/commentlist/ageree/?id=" + realId
@@ -599,14 +693,14 @@ public class XMRobot implements Runnable {
 		HttpResponse response = client.execute(get);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id + " judge " + rate + " to " + cid
+			System.out.println(this.id + " judge " + rate + " to " + cidStr
 					+ " failed");
 			ret.add("fail");
 			return ret;
 		}
 		String pageString = getResponseContent(response);
 		DEBUG(pageString);
-		System.out.println(this.id + " judge " + rate + " to " + cid
+		System.out.println(this.id + " judge " + rate + " to " + cidStr
 				+ " success");
 		Matcher m = judgeReturnPattern.matcher(pageString);
 		if (m.find()) {

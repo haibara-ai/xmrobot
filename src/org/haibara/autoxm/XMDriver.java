@@ -35,6 +35,7 @@ public class XMDriver {
 		methodMap.put("login", "loginXM");
 		methodMap.put("logout", "logoutXM");
 		methodMap.put("setup_uid_nick", "setupUidNick");
+		methodMap.put("regist", "registXM");
 	}
 
 	/*
@@ -246,6 +247,7 @@ public class XMDriver {
 		Map<String, List<Map<String, String>>> users = XMDriver.loadUser(root
 				+ userFilePath);
 		Map<String, String> namePwMap = new HashMap<String, String>();
+		namePwMap.put("null", "null");
 		for (List<Map<String, String>> tmpUsers : users.values()) {
 			for (Map<String, String> user : tmpUsers) {
 				namePwMap.put(user.get("user"), user.get("password"));
@@ -446,7 +448,7 @@ public class XMDriver {
 				return methodMap.get(mkey);
 			}
 		}
-		return null;
+		throw new RuntimeException("can't find resolve method : "+methodStr);
 	}
 	
 	private void collectMethodParams(int paramIndex, String[] methodParams,

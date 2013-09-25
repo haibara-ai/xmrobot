@@ -74,7 +74,7 @@ public class XMTaskThread implements Runnable {
 						@SuppressWarnings("unchecked")
 						List<String> stageOutput = ((List<String>) curMethod
 								.invoke(robot, ((Object[]) methodParams)));
-						if (stageOutput.contains("fail")) {
+						if (null == stageOutput || stageOutput.contains("fail")) {
 							System.err.println(robot.id + " "
 									+ curMethod.toString() + " failed");
 						} else {
