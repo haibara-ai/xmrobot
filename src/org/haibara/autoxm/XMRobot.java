@@ -712,6 +712,66 @@ public class XMRobot implements Runnable {
 		return ret;
 	}
 
+	public List<String> postCommentToArtist(String artistId, String comment)
+			throws ClientProtocolException, IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" post comment to song failed: login xm failed");
+				return null;
+			}
+		}
+		HttpGet get = new HttpGet(
+				"http://www.xiami.com/commentlist/add?type=3&oid=" + artistId
+						+ "&content=" + URLEncoder.encode(comment, "UTF-8")
+						+ "&relids=&mode=ajax&_xiamitoken=" + this.xiamiToken);
+		get.addHeader("Host", xmHostHeader);
+		get.addHeader("User-Agent", userAgentHeader);
+		get.addHeader("Accept",
+				"application/json, text/javascript, */*; q=0.01");
+		get.addHeader("Accept-Language", acceptLanguageHeader);
+		get.addHeader("Connection", connectionHeader);
+		get.addHeader("X-Requested-With", "XMLHttpRequest");
+		get.addHeader("Accept-Encoding", acceptEncodingHeader);
+		get.addHeader("Referer", "http://" + xmHostHeader + "/artist/" + artistId);
+		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		HttpResponse response = client.execute(get);
+		String pageString = getResponseContent(response);
+		DEBUG(pageString);
+		int statusCode = response.getStatusLine().getStatusCode();
+		if (statusCode != 200) {
+			System.out.println(this.id + " post " + comment + " to " + artistId
+					+ " failed : " + statusCode);			
+			return setupReturn("fail");
+		}
+		try {
+			JSONObject returnJson = new JSONObject(pageString);
+			if (returnJson.get("status").equals("failed")) {
+				System.err.println(this.id + " post " + comment + " to "
+						+ artistId + " failed");
+				System.err.println("detail:" + returnJson.get("msg"));
+				return setupReturn("fail");
+			} else if (returnJson.get("status").equals("ok")) {
+				System.out.println(this.id + " post " + comment + " to "
+						+ artistId + " success");
+				Matcher m = commentIdPattern.matcher(returnJson
+						.getString("output"));
+				if (m.find()) {
+					System.out.println("detail:" + m.group(1));
+					return setupReturn(m.group(1)+":"+"post");
+				} else {
+					System.err.println("detail:get comment id failed");
+					return setupReturn("fail");
+				}
+			}
+		} catch (JSONException e) {
+			System.err.println(this.id + " post " + comment + " to " + artistId
+					+ " failed");
+			System.err.println("detail:" + pageString);
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
 	public List<String> postCommentToSong(String songId, String comment)
 			throws ClientProtocolException, IOException {
 		if (!this.online) {

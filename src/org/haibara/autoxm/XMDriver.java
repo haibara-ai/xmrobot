@@ -36,6 +36,7 @@ public class XMDriver {
 		methodMap.put("logout", "logoutXM");
 		methodMap.put("setup_uid_nick", "setupUidNick");
 		methodMap.put("regist", "registXM");
+		methodMap.put("post_comment_to_artist", "postCommentToArtist");
 	}
 
 	/*
