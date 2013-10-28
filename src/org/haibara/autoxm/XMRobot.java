@@ -832,6 +832,59 @@ public class XMRobot implements Runnable {
 		return null;
 	}
 	
+	public List<String> shareCollect(String cid, String shareComment) throws ClientProtocolException, IOException {
+		if (!this.online) {
+			if (null == this.loginXM()) {
+				System.err.println(this.id+" post comment to song failed: login xm failed");
+				return null;
+			}
+		}
+
+		HttpPost post = new HttpPost("http://www.xiami.com/recommend/post");
+		List<NameValuePair> data = new ArrayList<NameValuePair>();
+		post.addHeader("Host", xmHostHeader);
+		post.addHeader("User-Agent", userAgentHeader);
+		post.addHeader("Accept", "*/*");
+		post.addHeader("Accept-Language", acceptLanguageHeader);
+		post.addHeader("Connection", connectionHeader);
+		post.addHeader("Content-Type",
+				"application/x-www-form-urlencoded; charset=UTF-8");
+		post.addHeader("X-Requested-With", "XMLHttpRequest");
+		post.addHeader("Referer", "http://www.xiami.com/song/showcollect/id/"+cid);		
+		post.addHeader("Accept-Charset", acceptCharsetHeader);
+		post.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
+		
+		data.add(new BasicNameValuePair("share_status", "0"));
+		data.add(new BasicNameValuePair("sid", ""));
+		data.add(new BasicNameValuePair("type", "35"));
+		data.add(new BasicNameValuePair("object_id", cid));
+		data.add(new BasicNameValuePair(xiamiTokenKey, xiamiToken));		
+		if (null == shareComment) {
+			shareComment = "";
+		}
+		data.add(new BasicNameValuePair("message", shareComment));
+		data.add(new BasicNameValuePair("submit", "分 享"));
+		
+		try {
+			post.setEntity(new UrlEncodedFormEntity(data, "UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+
+		HttpResponse response = client.execute(post);
+		int statusCode = response.getStatusLine().getStatusCode();
+		String pageString = getResponseContent(response);
+		if (statusCode != 200) {
+			System.err.println(this.id + " share collect " + cid + " failed:" + statusCode);
+			System.err.println("detail:" + pageString);
+			return setupReturn("fail");
+		}
+
+		System.out.println(this.id + " share collect " + cid + " success");
+		System.out.println("detail:" + pageString);
+		return setupReturn("success");
+	}
+	
 	public List<String> unfollow(String uid) throws ClientProtocolException,
 			IOException {
 		if (!this.online) {
