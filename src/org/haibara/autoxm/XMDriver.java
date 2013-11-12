@@ -37,6 +37,7 @@ public class XMDriver {
 		methodMap.put("setup_uid_nick", "setupUidNick");
 		methodMap.put("regist", "registXM");
 		methodMap.put("post_comment_to_artist", "postCommentToArtist");
+		methodMap.put("post_comment_to_album", "postCommentToAlbum");		
 		methodMap.put("share_collect", "shareCollect");		
 	}
 

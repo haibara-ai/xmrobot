@@ -61,7 +61,15 @@ public class XMRobot implements Runnable {
 	protected final String connectionHeader = "keep-alive";
 	protected final String contentTypeHeader = "application/x-www-form-urlencoded";
 	protected final String socketioHostHeader = "sio.xiami.com";
-
+	
+	private static Map<Integer,String> objectTypeName = new HashMap<Integer, String>();
+	
+	static {
+		objectTypeName.put(1, "album");
+		objectTypeName.put(3, "artist");
+		objectTypeName.put(4, "song");
+	}
+	
 	private static final Pattern judgeReturnPattern = Pattern
 			.compile("<strong>(.*?)</strong>");
 	private static final Pattern commentIdPattern = Pattern
@@ -583,7 +591,6 @@ public class XMRobot implements Runnable {
 		get.addHeader("Accept","text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
 		get.addHeader("Accept-Language", acceptLanguageHeader);
 		get.addHeader("Referer", "http://www.xiami.com/web");
-//		get.addHeader("Accept-Charset", acceptCharsetHeader);
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
 		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		get.addHeader("Connection", connectionHeader);
@@ -714,65 +721,10 @@ public class XMRobot implements Runnable {
 
 	public List<String> postCommentToArtist(String artistId, String comment)
 			throws ClientProtocolException, IOException {
-		if (!this.online) {
-			if (null == this.loginXM()) {
-				System.err.println(this.id+" post comment to song failed: login xm failed");
-				return null;
-			}
-		}
-		HttpGet get = new HttpGet(
-				"http://www.xiami.com/commentlist/add?type=3&oid=" + artistId
-						+ "&content=" + URLEncoder.encode(comment, "UTF-8")
-						+ "&relids=&mode=ajax&_xiamitoken=" + this.xiamiToken);
-		get.addHeader("Host", xmHostHeader);
-		get.addHeader("User-Agent", userAgentHeader);
-		get.addHeader("Accept",
-				"application/json, text/javascript, */*; q=0.01");
-		get.addHeader("Accept-Language", acceptLanguageHeader);
-		get.addHeader("Connection", connectionHeader);
-		get.addHeader("X-Requested-With", "XMLHttpRequest");
-		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Referer", "http://" + xmHostHeader + "/artist/" + artistId);
-		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
-		HttpResponse response = client.execute(get);
-		String pageString = getResponseContent(response);
-		DEBUG(pageString);
-		int statusCode = response.getStatusLine().getStatusCode();
-		if (statusCode != 200) {
-			System.out.println(this.id + " post " + comment + " to " + artistId
-					+ " failed : " + statusCode);			
-			return setupReturn("fail");
-		}
-		try {
-			JSONObject returnJson = new JSONObject(pageString);
-			if (returnJson.get("status").equals("failed")) {
-				System.err.println(this.id + " post " + comment + " to "
-						+ artistId + " failed");
-				System.err.println("detail:" + returnJson.get("msg"));
-				return setupReturn("fail");
-			} else if (returnJson.get("status").equals("ok")) {
-				System.out.println(this.id + " post " + comment + " to "
-						+ artistId + " success");
-				Matcher m = commentIdPattern.matcher(returnJson
-						.getString("output"));
-				if (m.find()) {
-					System.out.println("detail:" + m.group(1));
-					return setupReturn(m.group(1)+":"+"post");
-				} else {
-					System.err.println("detail:get comment id failed");
-					return setupReturn("fail");
-				}
-			}
-		} catch (JSONException e) {
-			System.err.println(this.id + " post " + comment + " to " + artistId
-					+ " failed");
-			System.err.println("detail:" + pageString);
-			e.printStackTrace();
-		}
-		return null;
+		return postCommentToObject(3, artistId, comment);
 	}
 	
-	public List<String> postCommentToSong(String songId, String comment)
+	public List<String> postCommentToObject(int objectType, String objectId, String comment)
 			throws ClientProtocolException, IOException {
 		if (!this.online) {
 			if (null == this.loginXM()) {
@@ -781,7 +733,7 @@ public class XMRobot implements Runnable {
 			}
 		}
 		HttpGet get = new HttpGet(
-				"http://www.xiami.com/commentlist/add?type=4&oid=" + songId
+				"http://www.xiami.com/commentlist/add?type="+objectType+"&oid=" + objectId
 						+ "&content=" + URLEncoder.encode(comment, "UTF-8")
 						+ "&relids=&mode=ajax&_xiamitoken=" + this.xiamiToken);
 		get.addHeader("Host", xmHostHeader);
@@ -792,14 +744,15 @@ public class XMRobot implements Runnable {
 		get.addHeader("Connection", connectionHeader);
 		get.addHeader("X-Requested-With", "XMLHttpRequest");
 		get.addHeader("Accept-Encoding", acceptEncodingHeader);
-		get.addHeader("Referer", "http://" + xmHostHeader + "/song/" + songId);
+		get.addHeader("Referer", "http://" + xmHostHeader + "/"+objectTypeName.get(objectType)+"/" + objectId);
 		get.addHeader("Cookie", xiamiTokenKey + "=" + this.xiamiToken);
 		HttpResponse response = client.execute(get);
+
 		String pageString = getResponseContent(response);
 		DEBUG(pageString);
 		int statusCode = response.getStatusLine().getStatusCode();
 		if (statusCode != 200) {
-			System.out.println(this.id + " post " + comment + " to " + songId
+			System.out.println(this.id + " post " + comment + " to " + objectId
 					+ " failed : " + statusCode);			
 			return setupReturn("fail");
 		}
@@ -807,12 +760,12 @@ public class XMRobot implements Runnable {
 			JSONObject returnJson = new JSONObject(pageString);
 			if (returnJson.get("status").equals("failed")) {
 				System.err.println(this.id + " post " + comment + " to "
-						+ songId + " failed");
+						+ objectId + " failed");
 				System.err.println("detail:" + returnJson.get("msg"));
 				return setupReturn("fail");
 			} else if (returnJson.get("status").equals("ok")) {
 				System.out.println(this.id + " post " + comment + " to "
-						+ songId + " success");
+						+ objectId + " success");
 				Matcher m = commentIdPattern.matcher(returnJson
 						.getString("output"));
 				if (m.find()) {
@@ -824,12 +777,24 @@ public class XMRobot implements Runnable {
 				}
 			}
 		} catch (JSONException e) {
-			System.err.println(this.id + " post " + comment + " to " + songId
+			System.err.println(this.id + " post " + comment + " to " + objectId
 					+ " failed");
 			System.err.println("detail:" + pageString);
 			e.printStackTrace();
 		}
 		return null;
+	}
+	
+	
+	public List<String> postCommentToAlbum(String albumId, String comment)
+			throws ClientProtocolException, IOException {
+		return postCommentToObject(1, albumId, comment);
+	}
+	
+	
+	public List<String> postCommentToSong(String songId, String comment)
+			throws ClientProtocolException, IOException {
+		return postCommentToObject(4, songId, comment);
 	}
 	
 	public List<String> shareCollect(String cid, String shareComment) throws ClientProtocolException, IOException {
@@ -881,7 +846,6 @@ public class XMRobot implements Runnable {
 		}
 
 		System.out.println(this.id + " share collect " + cid + " success");
-		System.out.println("detail:" + pageString);
 		return setupReturn("success");
 	}
 	
